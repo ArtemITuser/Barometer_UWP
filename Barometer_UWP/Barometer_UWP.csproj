@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>Barometer_UWP</RootNamespace>
+    <OutputType>AppContainerExe</OutputType>
+    <AppxPackage>true</AppxPackage>
+    <ApplicationTitle>Barometer UWP</ApplicationTitle>
+    <ApplicationDescription>Barometer application for UWP devices</ApplicationDescription>
+    <ApplicationVersion>1.0.0.0</ApplicationVersion>
+    <TargetPlatformMinVersion>10.0.15063.0</TargetPlatformMinVersion>
+    <TargetPlatformVersion>10.0.19041.0</TargetPlatformVersion>
+    <AppxBundle>Always</AppxBundle>
+    <AppxBundlePlatforms>ARM32|ARM64</AppxBundlePlatforms>
+    <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
+    <AppInstallerUpdateFrequency>0</AppInstallerUpdateFrequency>
+    <AppInstallerCheckForUpdateFrequency>OnApplicationRun</AppInstallerCheckForUpdateFrequency>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform" Version="6.2.14" />
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+    <PackageReference Include="OxyPlot.UWP" Version="2016.1.0" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.48.0" />
+    <PackageReference Include="Microsoft.Graph" Version="2.0.0" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="2.12.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PRIResource Include="Strings\ru-RU\Resources.resw" />
+    <PRIResource Include="Strings\en-US\Resources.resw" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\**" />
+  </ItemGroup>
+</Project>

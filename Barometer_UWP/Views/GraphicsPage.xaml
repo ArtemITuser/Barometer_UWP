@@ -1,0 +1,50 @@
+<Page
+    x:Class="Barometer_UWP.Views.GraphicsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Barometer_UWP.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:oxy="using:OxyPlot.Windows"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Padding="20" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
+            <TextBlock Text="Pressure Graphics" 
+                       Style="{ThemeResource HeaderTextBlockStyle}" 
+                       HorizontalAlignment="Center" 
+                       Margin="0,0,0,10"/>
+        </StackPanel>
+
+        <!-- Chart Area -->
+        <Grid Grid.Row="1" Padding="20">
+            <oxy:PlotView x:Name="PressurePlot" 
+                          Model="{x:Bind ViewModel.PressureData, Mode=OneWay}"/>
+        </Grid>
+
+        <!-- Controls -->
+        <StackPanel Grid.Row="2" Padding="20" Orientation="Horizontal" HorizontalAlignment="Center">
+            <Button Content="Live Mode" 
+                    Command="{x:Bind ViewModel.ToggleLiveModeCommand}" 
+                    Margin="0,0,10,0"/>
+            <DatePicker x:Name="StartDatePicker" 
+                        Date="{x:Bind ViewModel.StartDate, Mode=TwoWay}" 
+                        Margin="0,0,10,0"/>
+            <DatePicker x:Name="EndDatePicker" 
+                        Date="{x:Bind ViewModel.EndDate, Mode=TwoWay}" 
+                        Margin="0,0,10,0"/>
+            <ComboBox x:Name="UnitComboBox" 
+                      ItemsSource="{x:Bind ViewModel.UnitMode, Mode=OneWay}" 
+                      SelectedItem="{x:Bind ViewModel.UnitMode, Mode=TwoWay}" 
+                      Margin="0,0,10,0"/>
+        </StackPanel>
+    </Grid>
+</Page>
