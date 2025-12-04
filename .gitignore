@@ -1,0 +1,46 @@
+```
+# Build artifacts
+*.obj
+*.exe
+*.dll
+*.pdb
+*.user
+*.userosscache
+*.sln.docstates
+
+# Output directories
+bin/
+obj/
+AppPackages/
+publish/
+
+# Dependencies
+packages/
+node_modules/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Testing
+TestResults/
+
+# User-specific files
+*.userprefs
+.vs/
+```
