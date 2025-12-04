@@ -1,25 +1,31 @@
 ```
-# Build artifacts
+# Compiled and build artifacts
 *.obj
 *.exe
 *.dll
 *.pdb
 *.user
 *.userosscache
-*.sln.docstates
-
-# Output directories
-bin/
-obj/
-AppPackages/
-publish/
+*.suo
+*.cache
+*.ilk
+*.exp
+*.lib
+*.iobj
+*.ipdb
+*.builds
+*.baml
 
 # Dependencies
 packages/
 node_modules/
+*.nupkg
 
-# Logs
+# Logs and temp files
 *.log
+*.tmp
+*.temp
+*.cache
 
 # Environment
 .env
@@ -27,20 +33,23 @@ node_modules/
 *.env.*
 
 # Editors
+.vs/
 .vscode/
-.idea/
 *.swp
 *.swo
+
+# Build results
+Debug/
+Release/
+bin/
+obj/
+out/
+dist/
+build/
 
 # OS generated files
 .DS_Store
 Thumbs.db
-desktop.ini
-
-# Testing
-TestResults/
-
-# User-specific files
-*.userprefs
-.vs/
+ehthumbs.db
+Icon?
 ```
