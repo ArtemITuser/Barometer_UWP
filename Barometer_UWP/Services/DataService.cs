@@ -101,5 +101,15 @@ namespace Barometer_UWP.Services
             
             await SaveAsync();
         }
+
+        public async Task ClearAsync()
+        {
+            lock (_lock)
+            {
+                _records.Clear();
+            }
+            
+            await SaveAsync();
+        }
     }
 }

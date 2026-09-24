@@ -10,18 +10,24 @@ namespace Barometer_UWP.Services
 {
     public class ExportService
     {
-        public async Task ExportCsvAsync(StorageFile file, CultureInfo culture = null)
+        public async Task ExportCsvAsync(StorageFile file, List<PressureRecord> records, CultureInfo culture = null)
         {
-            var dataService = App.Current.Services.DataService;
-            var records = dataService.GetAll();
+            if (records == null)
+            {
+                var dataService = App.Current.Services.DataService;
+                records = dataService.GetAll().ToList();
+            }
             await CsvHelper.SaveToCsvFileAsync(records, file, culture);
         }
 
-        public async Task ExportTxtAsync(StorageFile file, CultureInfo culture = null)
+        public async Task ExportTxtAsync(StorageFile file, List<PressureRecord> records, CultureInfo culture = null)
         {
             culture = culture ?? CultureInfo.InvariantCulture;
-            var dataService = App.Current.Services.DataService;
-            var records = dataService.GetAll();
+            if (records == null)
+            {
+                var dataService = App.Current.Services.DataService;
+                records = dataService.GetAll().ToList();
+            }
             
             var content = "";
             content += "Timestamp\tPressure_hPa\tPressure_mmHg" + Environment.NewLine;
@@ -34,15 +40,20 @@ namespace Barometer_UWP.Services
             await FileIO.WriteTextAsync(file, content);
         }
 
-        public async Task ExportXlsxAsync(StorageFile file, CultureInfo culture = null)
+        public async Task ExportXlsxAsync(StorageFile file, List<PressureRecord> records, CultureInfo culture = null)
         {
-            var dataService = App.Current.Services.DataService;
-            var records = dataService.GetAll();
+            if (records == null)
+            {
+                var dataService = App.Current.Services.DataService;
+                records = dataService.GetAll().ToList();
+            }
             await ExcelHelper.SaveToExcelFileAsync(records, file);
         }
 
         public async Task ImportCsvAsync(StorageFile file, CultureInfo culture = null)
         {
+            if (file == null) return;
+            
             culture = culture ?? CultureInfo.InvariantCulture;
             var dataService = App.Current.Services.DataService;
             
@@ -72,6 +83,24 @@ namespace Barometer_UWP.Services
                             await dataService.AddAsync(record);
                         }
                     }
+                }
+            }
+        }
+
+        public async Task ImportXlsxAsync(StorageFile file)
+        {
+            if (file == null) return;
+            
+            var dataService = App.Current.Services.DataService;
+            var records = await ExcelHelper.LoadFromExcelFileAsync(file);
+            
+            foreach (var record in records)
+            {
+                // Avoid duplicates by checking if record with same timestamp already exists
+                var existingRecord = dataService.GetAll().Find(r => r.Timestamp == record.Timestamp);
+                if (existingRecord == null)
+                {
+                    await dataService.AddAsync(record);
                 }
             }
         }

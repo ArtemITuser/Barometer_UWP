@@ -17,6 +17,18 @@ namespace Barometer_UWP
         {
             this.InitializeComponent();
             this.Suspending += OnSuspending;
+            
+            // Initialize services
+            InitializeServices();
+        }
+
+        private void InitializeServices()
+        {
+            Services.Register<SensorService>(new SensorService());
+            Services.Register<DataService>(new DataService());
+            Services.Register<AuthService>(new AuthService());
+            Services.Register<OneDriveService>(new OneDriveService(Services.AuthService));
+            Services.Register<ScheduleService>(new ScheduleService());
         }
 
         protected override void OnLaunched(LaunchActivatedEventArgs e)
