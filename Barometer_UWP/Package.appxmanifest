@@ -4,22 +4,21 @@
     xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
     xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
     xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
-    xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-    IgnorableNamespaces="uap3 rescap mp">
+    IgnorableNamespaces="uap3 mp">
 
-  <Identity Name="BarometerUWP" Publisher="CN=BarometerUWP" Version="1.0.0.0" ProcessorArchitecture="neutral" />
+  <Identity Name="6280BarometerUWP.BarometerUWP" Publisher="CN=ArtemITuser" Version="1.4.0.0" ProcessorArchitecture="neutral" />
 
-  <mp:PhoneIdentity PhoneProductId="BarometerUWP" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="7c1e9a52-3f84-4d2b-9c31-5e2a7f9b4d10" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
     <DisplayName>Barometer UWP</DisplayName>
-    <PublisherDisplayName>BarometerUWP</PublisherDisplayName>
-    <Description>Barometer application for UWP devices</Description>
+    <PublisherDisplayName>ArtemITuser</PublisherDisplayName>
+    <Description>Barometer for Windows 10 Mobile (Lumia 950 / 950 XL / HP Elite x3)</Description>
     <Logo>Assets\Square44x44Logo.png</Logo>
   </Properties>
 
   <Dependencies>
-    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.15063.0" MaxVersionTested="10.0.19041.0" />
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.15063.0" MaxVersionTested="10.0.15254.0" />
   </Dependencies>
 
   <Resources>
@@ -35,25 +34,27 @@
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png"
         BackgroundColor="transparent">
-        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" ShortName="Barometer">
+          <uap:ShowNameOnTiles>
+            <uap:ShowOn Tile="square150x150Logo"/>
+            <uap:ShowOn Tile="wide310x150Logo"/>
+          </uap:ShowNameOnTiles>
+        </uap:DefaultTile>
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
+      <Extensions>
+        <uap3:Extension Category="windows.appExecutionAlias">
+          <uap3:AppExecutionAlias>
+            <uap3:ExecutionAlias Alias="BarometerUWP.exe" />
+          </uap3:AppExecutionAlias>
+        </uap3:Extension>
+      </Extensions>
     </Application>
   </Applications>
 
   <Capabilities>
     <Capability Name="internetClient" />
-    <DeviceCapability Name="barometer" />
     <DeviceCapability Name="location" />
-    <rescap:Capability Name="enterpriseAuthentication" />
   </Capabilities>
-
-  <Extensions>
-    <uap3:Extension Category="windows.appExecutionAlias">
-      <uap3:AppExecutionAlias>
-        <uap3:ExecutionAlias Alias="BarometerUWP.exe" />
-      </uap3:AppExecutionAlias>
-    </uap3:Extension>
-  </Extensions>
 
 </Package>

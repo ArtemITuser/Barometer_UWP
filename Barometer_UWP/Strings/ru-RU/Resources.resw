@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+<xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+<xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+<xsd:element name="root" msdata:IsDataSet="true">
+<xsd:complexType><xsd:choice maxOccurs="unbounded">
+<xsd:element name="metadata"><xsd:complexType><xsd:sequence><xsd:element name="value" type="xsd:string" minOccurs="0" /></xsd:sequence><xsd:attribute name="name" use="required" type="xsd:string" /><xsd:attribute name="type" type="xsd:string" /><xsd:attribute name="mimetype" type="xsd:string" /><xsd:attribute ref="xml:space" /></xsd:complexType></xsd:element>
+<xsd:element name="assembly"><xsd:complexType><xsd:attribute name="alias" type="xsd:string" /><xsd:attribute name="name" type="xsd:string" /></xsd:complexType></xsd:element>
+<xsd:element name="data"><xsd:complexType><xsd:sequence><xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" /><xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" /></xsd:sequence><xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" /><xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" /><xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" /><xsd:attribute ref="xml:space" /></xsd:complexType></xsd:element>
+<xsd:element name="resheader"><xsd:complexType><xsd:sequence><xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" /></xsd:sequence><xsd:attribute name="name" type="xsd:string" use="required" /></xsd:complexType></xsd:element>
+</xsd:choice></xsd:complexType></xsd:element></xsd:schema>
+<resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+<resheader name="version"><value>2.0</value></resheader>
+<resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+<resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+<data name="AppTitle" xml:space="preserve"><value>Барометр</value></data>
+<data name="CurrentPressure" xml:space="preserve"><value>Текущее давление</value></data>
+<data name="RecentReadings" xml:space="preserve"><value>Последние записи</value></data>
+<data name="Graphics" xml:space="preserve"><value>График</value></data>
+<data name="Settings" xml:space="preserve"><value>Настройки</value></data>
+<data name="Share" xml:space="preserve"><value>Поделиться</value></data>
+<data name="SwitchUnit" xml:space="preserve"><value>Единицы</value></data>
+<data name="UnitMmHg" xml:space="preserve"><value>мм рт. ст.</value></data>
+<data name="UnitHpa" xml:space="preserve"><value>гПа</value></data>
+<data name="Theme" xml:space="preserve"><value>Тема</value></data>
+<data name="ThemeLight" xml:space="preserve"><value>Светлая</value></data>
+<data name="ThemeDark" xml:space="preserve"><value>Тёмная</value></data>
+<data name="ThemeAuto" xml:space="preserve"><value>Авто (от заката до рассвета)</value></data>
+<data name="Language" xml:space="preserve"><value>Язык</value></data>
+<data name="ExportCsv" xml:space="preserve"><value>Экспорт CSV</value></data>
+<data name="ExportTxt" xml:space="preserve"><value>Экспорт TXT</value></data>
+<data name="ExportXlsx" xml:space="preserve"><value>Экспорт XLSX</value></data>
+<data name="ImportCsv" xml:space="preserve"><value>Импорт CSV</value></data>
+<data name="ImportXlsx" xml:space="preserve"><value>Импорт XLSX</value></data>
+<data name="BackupNow" xml:space="preserve"><value>Бэкап сейчас</value></data>
+<data name="Restore" xml:space="preserve"><value>Восстановить</value></data>
+<data name="OneDriveSignIn" xml:space="preserve"><value>Войти в OneDrive</value></data>
+<data name="OneDriveSignOut" xml:space="preserve"><value>Выйти</value></data>
+<data name="CheckUpdates" xml:space="preserve"><value>Проверить обновления</value></data>
+<data name="Live" xml:space="preserve"><value>Live</value></data>
+<data name="Period" xml:space="preserve"><value>Период</value></data>
+<data name="PrevPeriod" xml:space="preserve"><value>Предыдущий период</value></data>
+<data name="NextPeriod" xml:space="preserve"><value>Следующий период</value></data>
+<data name="SavePng" xml:space="preserve"><value>Сохранить PNG</value></data>
+<data name="SaveJpeg" xml:space="preserve"><value>Сохранить JPEG</value></data>
+<data name="SaveHtml" xml:space="preserve"><value>Сохранить HTML</value></data>
+</root>
