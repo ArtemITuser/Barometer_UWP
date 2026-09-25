@@ -2,10 +2,8 @@
     x:Class="Barometer_UWP.Views.GraphicsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:local="using:Barometer_UWP.Views"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:lvc="using:LiveCharts.UWP"
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
@@ -14,51 +12,54 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Header with Acrylic background -->
-        <StackPanel Grid.Row="0" Padding="20" Background="{ThemeResource SystemControlAcrylicElementBrush}">
-            <TextBlock Text="Pressure Graphics" 
-                       Style="{ThemeResource HeaderTextBlockStyle}" 
-                       HorizontalAlignment="Center" 
-                       Margin="0,0,0,10"/>
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Padding="12,8" Background="{ThemeResource SystemControlAcrylicElementBrush}">
+            <TextBlock Text="График давления" Style="{ThemeResource TitleTextBlockStyle}"/>
         </StackPanel>
 
-        <!-- Chart Area -->
-        <Grid Grid.Row="1" Padding="20">
-            <lvc:CartesianChart x:Name="PressureChart" 
-                                Series="{x:Bind ViewModel.SeriesCollection, Mode=OneWay}"
-                                DisableAnimations="False"
-                                Hoverable="True"
-                                DataTooltip="{x:Bind ViewModel.ChartTooltip, Mode=OneWay}">
-                <lvc:CartesianChart.AxisX>
-                    <lvc:Axis Title="Time" Labels="{x:Bind ViewModel.DateTimeLabels, Mode=OneWay}" 
-                              ShowLabels="True"/>
-                </lvc:CartesianChart.AxisX>
-                <lvc:CartesianChart.AxisY>
-                    <lvc:Axis Title="Pressure" LabelFormatter="{x:Bind ViewModel.YFormatter, Mode=OneWay}"/>
-                </lvc:CartesianChart.AxisY>
-            </lvc:CartesianChart>
+        <!-- Interactive chart area: pan with finger, pinch-zoom Y axis, tap for tooltip -->
+        <Grid Grid.Row="1" x:Name="ChartHost" Margin="8"
+              ManipulationMode="TranslateX, Scale"
+              ManipulationStarted="ChartHost_ManipulationStarted"
+              ManipulationDelta="ChartHost_ManipulationDelta"
+              Tapped="ChartHost_Tapped">
+            <Image x:Name="ChartImage" Stretch="Uniform" Source="{x:Bind ViewModel.ChartBitmap, Mode=OneWay}"/>
+            <Canvas x:Name="OverlayCanvas" IsHitTestVisible="False"/>
+            <Border x:Name="TooltipBorder" Visibility="Collapsed"
+                    Background="{ThemeResource FlyoutBackgroundThemeBrush}"
+                    BorderBrush="{ThemeResource FlyoutBorderThemeBrush}" BorderThickness="1"
+                    Padding="8,4" CornerRadius="4" HorizontalAlignment="Left" VerticalAlignment="Top">
+                <TextBlock x:Name="TooltipText" FontSize="13"/>
+            </Border>
+            <TextBlock Text="Нет данных за период" Foreground="{ThemeResource GrayText}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Visibility="{x:Bind ViewModel.EmptyHintVisibility, Mode=OneWay}"/>
         </Grid>
 
-        <!-- Controls -->
-        <StackPanel Grid.Row="2" Padding="20" Orientation="Horizontal" HorizontalAlignment="Center">
-            <Button Content="Live Mode" 
-                    Command="{x:Bind ViewModel.ToggleLiveModeCommand}" 
-                    Margin="0,0,10,0"/>
-            <Button Content="Export PNG" 
-                    Command="{x:Bind ViewModel.ExportPngCommand}" 
-                    Margin="0,0,10,0"/>
-            <Button Content="Export XLSX" 
-                    Command="{x:Bind ViewModel.ExportXlsxCommand}" 
-                    Margin="0,0,10,0"/>
-            <ComboBox x:Name="PeriodComboBox" 
-                      ItemsSource="{x:Bind ViewModel.PeriodOptions, Mode=OneWay}" 
-                      SelectedItem="{x:Bind ViewModel.SelectedPeriod, Mode=TwoWay}" 
-                      Margin="0,0,10,0"/>
-            <Button Content="Share" 
-                    Command="{x:Bind ViewModel.ShareCommand}" 
-                    Margin="0,0,10,0"/>
+        <!-- Axis info + min/max -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12" Margin="8,0">
+            <TextBlock Text="{x:Bind ViewModel.AxisInfoText, Mode=OneWay}" FontSize="13" VerticalAlignment="Center"/>
+            <TextBlock Text="{x:Bind ViewModel.RangeInfoText, Mode=OneWay}" FontSize="13" VerticalAlignment="Center"/>
         </StackPanel>
+
+        <!-- Toolbar -->
+        <ScrollViewer Grid.Row="3" HorizontalScrollMode="Auto" HorizontalScrollBarVisibility="Hidden" Padding="8">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="&#xE26D;" FontFamily="Segoe MDL2 Assets" ToolTipService.ToolTip="Назад"
+                        Command="{x:Bind ViewModel.PrevPeriodCommand}" Margin="0,0,4,0"/>
+                <ComboBox ItemsSource="{x:Bind ViewModel.PeriodOptions, Mode=OneWay}"
+                          SelectedIndex="{x:Bind ViewModel.PeriodIndex, Mode=TwoWay}" MinWidth="110" Margin="0,0,4,0"/>
+                <Button Content="&#xE26B;" FontFamily="Segoe MDL2 Assets" ToolTipService.ToolTip="Вперёд"
+                        Command="{x:Bind ViewModel.NextPeriodCommand}" Margin="0,0,12,0"/>
+                <ToggleButton Content="Live" IsChecked="{x:Bind ViewModel.IsLiveMode, Mode=TwoWay}" Margin="0,0,12,0"/>
+                <Button Content="PNG" Command="{x:Bind ViewModel.SavePngCommand}" Margin="0,0,4,0"/>
+                <Button Content="JPEG" Command="{x:Bind ViewModel.SaveJpegCommand}" Margin="0,0,4,0"/>
+                <Button Content="HTML" Command="{x:Bind ViewModel.SaveHtmlCommand}" Margin="0,0,4,0"/>
+                <Button Content="Поделиться" Command="{x:Bind ViewModel.ShareCommand}"/>
+            </StackPanel>
+        </ScrollViewer>
     </Grid>
 </Page>

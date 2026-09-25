@@ -1,67 +1,154 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Windows.UI.Xaml;
 using Barometer_UWP.Helpers;
 using Barometer_UWP.Models;
 using Barometer_UWP.Services;
 
 namespace Barometer_UWP.ViewModels
 {
-    public class MainViewModel : INotifyPropertyChanged
+    /// <summary>
+    /// Main page view model: live pressure display (mmHg / hPa switch),
+    /// recent readings list, schedule-throttled persistence and tile updates.
+    /// </summary>
+    public class MainViewModel : INotifyPropertyChanged, IDisposable
     {
+        private const int MaxRecent = 50;       // items shown in the recent list
+        private const int TileThrottleSec = 60; // min seconds between tile updates
+
         private readonly SensorService _sensorService;
         private readonly DataService _dataService;
         private readonly TileService _tileService;
-        private UnitMode _unitMode;
+        private readonly ScheduleService _scheduleService;
+
+        private UnitMode _unitMode = UnitMode.MmHg;
         private double _currentPressure;
-        private string _currentPressureFormatted;
-        private ObservableCollection<PressureRecord> _recentRecords;
+        private string _currentPressureFormatted = "--";
+        private string _trendText = "";
+        private DateTime _lastTileUpdate = DateTime.MinValue;
+        private DateTime? _lastSavedAt = null;
+        private bool _disposed;
+
+        public ObservableCollection<PressureRecord> RecentRecords { get; }
+            = new ObservableCollection<PressureRecord>();
 
         public MainViewModel()
         {
-            _sensorService = App.Current.Services.SensorService;
-            _dataService = App.Current.Services.DataService;
-            _tileService = new TileService();
-            
-            _recentRecords = new ObservableCollection<PressureRecord>();
-            _unitMode = UnitMode.MmHg; // Default to mmHg
-            
-            InitializeAsync();
-            
-            // Subscribe to sensor readings
-            _sensorService.OnReading += OnPressureReading;
-            
-            // Initialize commands
-            SwitchUnitCommand = new RelayCommand(SwitchUnit);
+            var services = App.Current?.Services;
+            _sensorService = services?.SensorService;
+            _dataService = services?.DataService;
+            _scheduleService = services?.ScheduleService;
+            _tileService = services?.TileService ?? new TileService();
+
+            SwitchUnitCommand = new RelayCommand(_ => ToggleUnit());
+            RefreshCommand = new RelayCommand(async _ => await RefreshAsync());
+
+            if (_sensorService != null) _sensorService.OnReading += OnPressureReading;
+
+            _ = InitializeAsync();
         }
 
-        private async void InitializeAsync()
+        private async Task InitializeAsync()
         {
-            await _dataService.InitializeAsync();
-            await _sensorService.InitializeAsync();
-            _sensorService.SetReportInterval(1000); // Update every second
+            try
+            {
+                if (_dataService != null)
+                {
+                    await _dataService.InitializeAsync();
+                    var all = _dataService.GetAll();
+                    foreach (var r in all.Skip(Math.Max(0, all.Count - MaxRecent)))
+                        RecentRecords.Add(r);
+                    if (all.Count > 0)
+                        CurrentPressure = GetDisplay(all[all.Count - 1]);
+                }
+            }
+            catch { /* storage may be momentarily busy */ }
+
+            try
+            {
+                if (_sensorService != null)
+                {
+                    await _sensorService.InitializeAsync();
+                    _sensorService.SetReportInterval(1000);
+                    var last = _sensorService.LastReading;
+                    if (last != null) CurrentPressure = GetDisplay(last);
+                }
+            }
+            catch { /* sensor may be absent on desktop emulator */ }
         }
+
+        private double GetDisplay(PressureRecord r) =>
+            _unitMode == UnitMode.MmHg ? r.PressureMmHg : r.PressureHpa;
 
         private void OnPressureReading(PressureRecord record)
         {
-            // Update current pressure
-            CurrentPressure = _unitMode == UnitMode.MmHg ? record.PressureMmHg : record.PressureHpa;
-            
-            // Add to recent records (limit to 10 most recent)
-            if (_recentRecords.Count >= 10)
+            if (record == null || _disposed) return;
+
+            // Marshal onto the UI thread (sensor callback arrives on a worker thread).
+            var dispatcher = Window.Current?.Dispatcher;
+            if (dispatcher != null && !dispatcher.HasThreadAccess)
             {
-                _recentRecords.RemoveAt(_recentRecords.Count - 1);
+                _ = dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal,
+                    () => HandleReading(record));
+                return;
             }
-            _recentRecords.Insert(0, record);
-            
-            // Add to data service
-            _ = _dataService.AddAsync(record);
-            
-            // Update live tile
-            _ = _tileService.UpdateTileAsync(record.PressureHpa);
+            HandleReading(record);
+        }
+
+        private void HandleReading(PressureRecord record)
+        {
+            if (_disposed) return;
+
+            CurrentPressure = GetDisplay(record);
+
+            // Persistence throttle: honor night-time schedule when configured.
+            bool allowSave = true;
+            if (_scheduleService != null)
+                allowSave = _scheduleService.ShouldCollectNow(DateTime.UtcNow);
+            if (allowSave && (_lastSavedAt == null ||
+                (DateTime.Now - _lastSavedAt.Value).TotalSeconds >= 5))
+            {
+                _lastSavedAt = DateTime.Now;
+                _ = SaveAndTrackAsync(record);
+            }
+
+            UpdateTrend(record);
+            MaybeUpdateTile(record);
+        }
+
+        private async Task SaveAndTrackAsync(PressureRecord record)
+        {
+            try
+            {
+                if (_dataService != null) await _dataService.AddAsync(record);
+            }
+            catch { }
+
+            RecentRecords.Add(record);
+            while (RecentRecords.Count > MaxRecent) RecentRecords.RemoveAt(0);
+        }
+
+        private void UpdateTrend(PressureRecord record)
+        {
+            int n = RecentRecords.Count;
+            if (n < 10) { TrendText = ""; return; }
+            double newest = GetDisplay(RecentRecords[n - 1]);
+            double older = GetDisplay(RecentRecords[Math.Max(0, n - 31)]);
+            double delta = newest - older;
+            TrendText = delta > 0.75 ? "\u25B2 растёт" : delta < -0.75 ? "\u25BC падает" : "\u2192 стабильно";
+        }
+
+        private void MaybeUpdateTile(PressureRecord record)
+        {
+            if ((DateTime.Now - _lastTileUpdate).TotalSeconds < TileThrottleSec) return;
+            _lastTileUpdate = DateTime.Now;
+            _ = _tileService.UpdateTileAsync(record);
         }
 
         public double CurrentPressure
@@ -71,29 +158,23 @@ namespace Barometer_UWP.ViewModels
             {
                 _currentPressure = value;
                 OnPropertyChanged();
-                CurrentPressureFormatted = $"{_currentPressure:F2}";
+                CurrentPressureFormatted = value > 0 ? value.ToString("F1") : "--";
             }
         }
 
         public string CurrentPressureFormatted
         {
             get => _currentPressureFormatted;
-            private set
-            {
-                _currentPressureFormatted = value;
-                OnPropertyChanged();
-            }
+            private set { _currentPressureFormatted = value; OnPropertyChanged(); }
         }
 
-        public ObservableCollection<PressureRecord> RecentRecords
+        public string TrendText
         {
-            get => _recentRecords;
-            private set
-            {
-                _recentRecords = value;
-                OnPropertyChanged();
-            }
+            get => _trendText;
+            private set { _trendText = value; OnPropertyChanged(); }
         }
+
+        public string UnitLabel => _unitMode == UnitMode.MmHg ? "мм рт. ст." : "гПа";
 
         public UnitMode UnitMode
         {
@@ -102,34 +183,46 @@ namespace Barometer_UWP.ViewModels
             {
                 _unitMode = value;
                 OnPropertyChanged();
-                
-                // Update current pressure display with new unit
-                if (_sensorService.LastReading != null)
-                {
-                    CurrentPressure = _unitMode == UnitMode.MmHg ? 
-                        _sensorService.LastReading.PressureMmHg : 
-                        _sensorService.LastReading.PressureHpa;
-                }
+                OnPropertyChanged(nameof(UnitLabel));
+                var last = _sensorService?.LastReading ??
+                    (RecentRecords.Count > 0 ? RecentRecords[RecentRecords.Count - 1] : null);
+                if (last != null) CurrentPressure = GetDisplay(last);
             }
         }
 
         public ICommand SwitchUnitCommand { get; }
+        public ICommand RefreshCommand { get; }
 
-        private void SwitchUnit(object parameter)
+        private void ToggleUnit()
         {
-            UnitMode = UnitMode == UnitMode.Hpa ? UnitMode.MmHg : UnitMode.Hpa;
+            UnitMode = _unitMode == UnitMode.MmHg ? UnitMode.Hpa : UnitMode.MmHg;
+        }
+
+        public async Task RefreshAsync()
+        {
+            try
+            {
+                if (_dataService != null)
+                {
+                    var all = await _dataService.LoadAsync();
+                    RecentRecords.Clear();
+                    foreach (var r in all.Skip(Math.Max(0, all.Count - MaxRecent)))
+                        RecentRecords.Add(r);
+                    if (all.Count > 0) CurrentPressure = GetDisplay(all[all.Count - 1]);
+                }
+            }
+            catch { }
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
-
-        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
-        {
+        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null) =>
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
 
         public void Dispose()
         {
-            _sensorService.OnReading -= OnPressureReading;
+            if (_disposed) return;
+            _disposed = true;
+            if (_sensorService != null) _sensorService.OnReading -= OnPressureReading;
         }
     }
 }
