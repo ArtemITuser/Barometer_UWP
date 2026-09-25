@@ -10,7 +10,7 @@ namespace Barometer_UWP
     sealed partial class App : Application
     {
         public static App Current => (App)Application.Current;
-        
+
         public ServiceContainer Services { get; } = new ServiceContainer();
 
         public App()
@@ -26,14 +26,7 @@ namespace Barometer_UWP
             if (rootFrame == null)
             {
                 rootFrame = new Frame();
-
                 rootFrame.NavigationFailed += OnNavigationFailed;
-
-                if (e.PreviousExecutionState == ApplicationExecutionState.Terminated)
-                {
-                    //TODO: Load state from previously suspended application
-                }
-
                 Window.Current.Content = rootFrame;
             }
 
@@ -41,10 +34,26 @@ namespace Barometer_UWP
             {
                 if (rootFrame.Content == null)
                 {
-                    rootFrame.Navigate(typeof(MainPage), e.Arguments);
+                    rootFrame.Navigate(typeof(Views.MainPage), e.Arguments);
                 }
-
                 Window.Current.Activate();
+            }
+
+            // Fire-and-forget async init of sensor + data store.
+            _ = InitializeServicesAsync();
+        }
+
+        private async System.Threading.Tasks.Task InitializeServicesAsync()
+        {
+            try
+            {
+                await Helpers.Logger.InitializeAsync();
+                await Services.DataService.InitializeAsync();
+                await Services.SensorService.InitializeAsync();
+            }
+            catch (Exception ex)
+            {
+                try { await Helpers.Logger.LogErrorAsync("Init failed", ex); } catch { }
             }
         }
 
@@ -56,7 +65,7 @@ namespace Barometer_UWP
         private void OnSuspending(object sender, SuspendingEventArgs e)
         {
             var deferral = e.SuspendingOperation.GetDeferral();
-            //TODO: Save application state and stop any background activity
+            _ = Services.DataService.SaveAsync();
             deferral.Complete();
         }
     }

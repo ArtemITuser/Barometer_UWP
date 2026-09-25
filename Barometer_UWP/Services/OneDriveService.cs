@@ -1,123 +1,133 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Net.Http.Headers;
+using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Graph;
-using Windows.Storage;
+using Windows.Storage.Streams;
+using Windows.Web.Http;
+using Windows.Web.Http.Headers;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Barometer_UWP.Services
 {
-    public class OneDriveService
+    /// <summary>
+    /// OneDrive backups via Microsoft Graph REST (App Root special folder),
+    /// authenticated with an MSA token from AuthService. No SDK dependencies,
+    /// fully compatible with Windows 10 Mobile ARM (15063+).
+    /// </summary>
+    public sealed class OneDriveService
     {
-        private GraphServiceClient _graphClient;
-        private AuthService _authService;
+        private const string GraphBase = "https://graph.microsoft.com/v1.0";
+        private const string AppRootChildren = GraphBase + "/me/drive/special/approot/children";
+        private const string AppRootItem = GraphBase + "/me/drive/special/approot/";
 
-        public OneDriveService(AuthService authService)
+        private readonly AuthService _auth;
+
+        public OneDriveService(AuthService auth)
         {
-            _authService = authService;
+            _auth = auth;
         }
 
-        public async Task<bool> InitializeAsync()
+        public bool IsAvailable => _auth != null && _auth.IsSignedIn;
+
+        private async Task<string> GetTokenAsync() => await _auth.GetAccessTokenAsync();
+
+        private static HttpClient CreateClient(string token)
         {
-            try
-            {
-                var token = await _authService.GetAccessTokenSilentAsync(new[] { "User.Read", "Files.ReadWrite.AppFolder" });
-                if (!string.IsNullOrEmpty(token))
-                {
-                    var authProvider = new DelegateAuthenticationProvider(
-                        requestMessage =>
-                        {
-                            requestMessage.Headers.Authorization = 
-                                new System.Net.Http.Headers.AuthenticationHeaderValue("bearer", token);
-                            return Task.CompletedTask;
-                        });
-                    
-                    _graphClient = new GraphServiceClient(authProvider);
-                    return true;
-                }
-            }
-            catch (Exception)
-            {
-                // Failed to initialize
-            }
-            
-            return false;
+            var http = new HttpClient();
+            http.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
+            http.DefaultRequestHeaders.Accept.TryParseAdd("application/json");
+            return http;
         }
 
+        /// <summary>Uploads (or replaces) a backup file in the OneDrive app folder.</summary>
         public async Task<bool> UploadBackupAsync(string filename, byte[] data)
         {
-            if (_graphClient == null)
-                return false;
+            var token = await GetTokenAsync();
+            if (token == null || data == null) return false;
 
             try
             {
-                var fileStream = new MemoryStream(data);
-                var uploadedItem = await _graphClient.Me.Drive.AppRoot
-                    .ItemWithPath(filename)
-                    .Content
-                    .Request()
-                    .PutAsync<DriveItem>(fileStream);
-
-                return uploadedItem != null;
+                using (var http = CreateClient(token))
+                {
+                    var content = new ByteArrayContent(data);
+                    content.Headers.ContentType =
+                        new HttpMediaTypeHeaderValue("application/octet-stream") { CharSet = "utf-8" };
+                    var url = AppRootItem + Uri.EscapeDataString(filename) + ":/content";
+                    var resp = await http.PutAsync(new Uri(url), content);
+                    return resp.IsSuccessStatusCode;
+                }
             }
-            catch (Exception)
-            {
-                return false;
-            }
+            catch { return false; }
         }
 
+        /// <summary>Downloads a backup file from the OneDrive app folder.</summary>
         public async Task<byte[]> DownloadBackupAsync(string filename)
         {
-            if (_graphClient == null)
-                return null;
+            var token = await GetTokenAsync();
+            if (token == null) return null;
 
             try
             {
-                var stream = await _graphClient.Me.Drive.AppRoot
-                    .ItemWithPath(filename)
-                    .Content
-                    .Request()
-                    .GetAsync();
-
-                using (var memoryStream = new MemoryStream())
+                using (var http = CreateClient(token))
                 {
-                    await stream.CopyToAsync(memoryStream);
-                    return memoryStream.ToArray();
+                    var url = AppRootItem + Uri.EscapeDataString(filename) + ":/content";
+                    var resp = await http.GetBufferAsync(new Uri(url));
+                    if (!resp.IsSuccessStatusCode) return null;
+                    var buffer = await resp.Content.ReadAsBufferAsync();
+                    var bytes = new byte[buffer.Length];
+                    using (var reader = DataReader.FromBuffer(buffer))
+                        reader.ReadBytes(bytes);
+                    return bytes;
                 }
             }
-            catch (Exception)
-            {
-                return null;
-            }
+            catch { return null; }
         }
 
-        public async Task<List<string>> ListBackupsAsync()
+        /// <summary>Lists backup files (*.json / *.xlsx) stored in the app folder.</summary>
+        public async Task<List<CloudBackupInfo>> ListBackupsAsync()
         {
-            var backups = new List<string>();
-            
-            if (_graphClient == null)
-                return backups;
+            var result = new List<CloudBackupInfo>();
+            var token = await GetTokenAsync();
+            if (token == null) return result;
 
             try
             {
-                var items = await _graphClient.Me.Drive.AppRoot
-                    .Children
-                    .Request()
-                    .Filter("name hasExtension 'json' or name hasExtension 'xlsx'")
-                    .GetAsync();
-
-                foreach (var item in items)
+                using (var http = CreateClient(token))
                 {
-                    backups.Add(item.Name);
+                    var next = AppRootChildren + "?$select=name,size,lastModifiedDateTime&$top=200";
+                    while (!string.IsNullOrEmpty(next))
+                    {
+                        var resp = await http.GetStringAsync(new Uri(next));
+                        var page = JObject.Parse(resp);
+                        foreach (var item in page["value"] ?? new JArray())
+                        {
+                            var name = item["name"]?.ToString();
+                            if (string.IsNullOrEmpty(name)) continue;
+                            if (!(name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ||
+                                  name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))) continue;
+                            DateTime.TryParse(item["lastModifiedDateTime"]?.ToString(), out var modified);
+                            result.Add(new CloudBackupInfo
+                            {
+                                Name = name,
+                                SizeBytes = item["size"]?.Value<long>() ?? 0,
+                                LastModified = modified
+                            });
+                        }
+                        next = page["@odata.nextLink"]?.ToString();
+                    }
                 }
             }
-            catch (Exception)
-            {
-                // Handle exception
-            }
+            catch { }
 
-            return backups;
+            return result.OrderByDescending(b => b.LastModified).ToList();
         }
+    }
+
+    public class CloudBackupInfo
+    {
+        public string Name { get; set; }
+        public long SizeBytes { get; set; }
+        public DateTime LastModified { get; set; }
     }
 }

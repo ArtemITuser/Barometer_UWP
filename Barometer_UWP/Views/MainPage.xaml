@@ -15,8 +15,8 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <StackPanel Grid.Row="0" Padding="20" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
+        <!-- Header with Acrylic background -->
+        <StackPanel Grid.Row="0" Padding="20" Background="{ThemeResource SystemControlAcrylicElementBrush}">
             <TextBlock Text="Barometer" 
                        Style="{ThemeResource HeaderTextBlockStyle}" 
                        HorizontalAlignment="Center" 

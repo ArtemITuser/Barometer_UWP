@@ -1,0 +1,235 @@
+<Page
+    x:Class="Barometer_UWP.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Barometer_UWP.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header with Acrylic background -->
+        <StackPanel Grid.Row="0" Padding="20" Background="{ThemeResource SystemControlAcrylicElementBrush}">
+            <TextBlock Text="Settings" 
+                       Style="{ThemeResource HeaderTextBlockStyle}" 
+                       HorizontalAlignment="Center" 
+                       Margin="0,0,0,10"/>
+        </StackPanel>
+
+        <!-- Scrollable content -->
+        <ScrollViewer Grid.Row="1">
+            <StackPanel Margin="20,10,20,20">
+
+            <!-- Theme Settings -->
+            <Expander Header="Theme Settings" Margin="0,0,0,20">
+                <StackPanel Padding="10">
+                    <TextBlock Text="Select Theme:" Margin="0,0,0,10"/>
+                    <ComboBox x:Name="ThemeComboBox" 
+                              SelectedItem="{x:Bind ViewModel.SelectedTheme, Mode=TwoWay}" 
+                              ItemsSource="{x:Bind ViewModel.ThemeOptions, Mode=OneWay}"
+                              HorizontalAlignment="Stretch" 
+                              Margin="0,0,0,10"/>
+                    
+                    <CheckBox x:Name="AutoThemeCheckBox" 
+                              IsChecked="{x:Bind ViewModel.UseAutoTheme, Mode=TwoWay}" 
+                              Content="Auto Theme (Based on Sunrise/Sunset)" 
+                              Margin="0,0,0,10"/>
+                </StackPanel>
+            </Expander>
+
+            <!-- Localization Settings -->
+            <Expander Header="Localization" Margin="0,0,0,20">
+                <StackPanel Padding="10">
+                    <TextBlock Text="Select Language:" Margin="0,0,0,10"/>
+                    <ComboBox x:Name="LanguageComboBox" 
+                              SelectedItem="{x:Bind ViewModel.SelectedLanguage, Mode=TwoWay}" 
+                              ItemsSource="{x:Bind ViewModel.LanguageOptions, Mode=OneWay}"
+                              HorizontalAlignment="Stretch" 
+                              Margin="0,0,0,10"/>
+                </StackPanel>
+            </Expander>
+
+            <!-- Export/Import Settings -->
+            <Expander Header="Export/Import Data" Margin="0,0,0,20">
+                <StackPanel Padding="10">
+                    <TextBlock Text="Export Data:" Margin="0,0,0,10"/>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="Export CSV" 
+                                Command="{x:Bind ViewModel.ExportCsvCommand}" 
+                                Margin="0,0,10,0"/>
+                        <Button Content="Export XLSX" 
+                                Command="{x:Bind ViewModel.ExportXlsxCommand}" 
+                                Margin="0,0,10,0"/>
+                        <Button Content="Export TXT" 
+                                Command="{x:Bind ViewModel.ExportTxtCommand}" 
+                                Margin="0,0,10,0"/>
+                    </StackPanel>
+                    
+                    <TextBlock Text="Import Data:" Margin="0,10,0,10"/>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="Import CSV" 
+                                Command="{x:Bind ViewModel.ImportCsvCommand}" 
+                                Margin="0,0,10,0"/>
+                        <Button Content="Import XLSX" 
+                                Command="{x:Bind ViewModel.ImportXlsxCommand}" 
+                                Margin="0,0,10,0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Expander>
+
+            <!-- Data Collection Settings -->
+            <Expander Header="Data Collection" Margin="0,0,0,20">
+                <StackPanel Padding="10">
+                    <TextBlock Text="Collection Frequency (seconds):" Margin="0,0,0,10"/>
+                    <Slider x:Name="FrequencySlider" 
+                            Minimum="1" 
+                            Maximum="3600" 
+                            Value="{x:Bind ViewModel.CollectionFrequency, Mode=TwoWay}" 
+                            Width="300" 
+                            Margin="0,0,0,10"/>
+                    <TextBlock x:Name="FrequencyValueText" 
+                               Text="{x:Bind ViewModel.CollectionFrequency, Mode=OneWay, StringFormat='{}{0} seconds'}" 
+                               Margin="0,0,0,10"/>
+                    
+                    <CheckBox x:Name="NightModeCheckBox" 
+                              IsChecked="{x:Bind ViewModel.UseNightMode, Mode=TwoWay}" 
+                              Content="Reduce Collection at Night" 
+                              Margin="0,0,0,10"/>
+                </StackPanel>
+            </Expander>
+
+            <!-- Schedule Settings -->
+            <Expander Header="Collection Schedule" Margin="0,0,0,20">
+                <StackPanel Padding="10">
+                    <ListView ItemsSource="{x:Bind ViewModel.ScheduleEntries, Mode=OneWay}" 
+                              Height="200" 
+                              Margin="0,0,0,10">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Padding="10" BorderBrush="Gray" BorderThickness="0,0,0,1">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" 
+                                               Text="{Binding IntervalString}" 
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" 
+                                               Text="{Binding StartString}" 
+                                               Margin="10,0" 
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2" 
+                                               Text="{Binding EndString}" 
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="Add Schedule" 
+                                Command="{x:Bind ViewModel.AddScheduleCommand}" 
+                                Margin="0,0,10,0"/>
+                        <Button Content="Remove Selected" 
+                                Command="{x:Bind ViewModel.RemoveScheduleCommand}" 
+                                Margin="0,0,10,0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Expander>
+
+            <!-- Backup Settings -->
+            <Expander Header="Backup Settings" Margin="0,0,0,20">
+                <StackPanel Padding="10">
+                    <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,0,0,10">
+                        <CheckBox x:Name="LocalBackupCheckBox" 
+                                  IsChecked="{x:Bind ViewModel.EnableLocalBackup, Mode=TwoWay}" 
+                                  Content="Local Backup" 
+                                  VerticalAlignment="Center"/>
+                        <CheckBox x:Name="OneDriveBackupCheckBox" 
+                                  IsChecked="{x:Bind ViewModel.EnableOneDriveBackup, Mode=TwoWay}" 
+                                  Content="OneDrive Backup" 
+                                  VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <TextBlock Text="Backup Frequency:" Margin="0,0,0,10"/>
+                    <ComboBox x:Name="BackupFrequencyComboBox" 
+                              SelectedItem="{x:Bind ViewModel.SelectedBackupFrequency, Mode=TwoWay}" 
+                              ItemsSource="{x:Bind ViewModel.BackupFrequencyOptions, Mode=OneWay}"
+                              HorizontalAlignment="Stretch" 
+                              Margin="0,0,0,10"/>
+                    
+                    <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,0,0,10">
+                        <Button Content="Backup Now" 
+                                Command="{x:Bind ViewModel.BackupNowCommand}" 
+                                Margin="0,0,10,0"/>
+                        <Button Content="Restore from OneDrive" 
+                                Command="{x:Bind ViewModel.RestoreFromOneDriveCommand}" 
+                                Margin="0,0,10,0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Expander>
+
+            <!-- OneDrive Settings -->
+            <Expander Header="OneDrive Settings" Margin="0,0,0,20">
+                <StackPanel Padding="10">
+                    <TextBlock x:Name="OneDriveStatusText" 
+                               Text="{x:Bind ViewModel.OneDriveStatus, Mode=OneWay}" 
+                               Margin="0,0,0,10"/>
+                    
+                    <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,0,0,10">
+                        <Button Content="Sign In" 
+                                Command="{x:Bind ViewModel.SignInToOneDriveCommand}" 
+                                Margin="0,0,10,0"/>
+                        <Button Content="Sign Out" 
+                                Command="{x:Bind ViewModel.SignOutFromOneDriveCommand}" 
+                                Margin="0,0,10,0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Expander>
+
+            <!-- Update Settings -->
+            <Expander Header="Update Settings" Margin="0,0,0,20">
+                <StackPanel Padding="10">
+                    <TextBlock Text="Current Version: 1.0.0" 
+                               Margin="0,0,0,10"/>
+                    
+                    <Button Content="Check for Updates" 
+                            Command="{x:Bind ViewModel.CheckForUpdatesCommand}" 
+                            Margin="0,0,0,10"/>
+                </StackPanel>
+            </Expander>
+
+            <!-- Tile Settings -->
+            <Expander Header="Tile Settings" Margin="0,0,0,20">
+                <StackPanel Padding="10">
+                    <TextBlock Text="Tile Display Period:" Margin="0,0,0,10"/>
+                    <ComboBox x:Name="TilePeriodComboBox" 
+                              SelectedItem="{x:Bind ViewModel.SelectedTilePeriod, Mode=TwoWay}" 
+                              ItemsSource="{x:Bind ViewModel.TilePeriodOptions, Mode=OneWay}"
+                              HorizontalAlignment="Stretch" 
+                              Margin="0,0,0,10"/>
+                    
+                    <CheckBox x:Name="ShowChartOnTileCheckBox" 
+                              IsChecked="{x:Bind ViewModel.ShowChartOnTile, Mode=TwoWay}" 
+                              Content="Show Chart on Tile" 
+                              Margin="0,0,0,10"/>
+                    
+                    <TextBlock Text="Tile Style:" Margin="0,0,0,10"/>
+                    <ComboBox x:Name="TileStyleComboBox" 
+                              SelectedItem="{x:Bind ViewModel.SelectedTileStyle, Mode=TwoWay}" 
+                              ItemsSource="{x:Bind ViewModel.TileStyleOptions, Mode=OneWay}"
+                              HorizontalAlignment="Stretch" 
+                              Margin="0,0,0,10"/>
+                </StackPanel>
+            </Expander>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

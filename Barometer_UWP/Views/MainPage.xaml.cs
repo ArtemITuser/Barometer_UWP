@@ -38,10 +38,20 @@ namespace Barometer_UWP.Views
             Frame.Navigate(typeof(SettingsPage));
         }
 
-        private void ShareButton_Click(object sender, RoutedEventArgs e)
+        private async void ShareButton_Click(object sender, RoutedEventArgs e)
         {
-            // Placeholder for share functionality
-            // This would use Windows.ApplicationModel.DataTransfer
+            // Share the current pressure reading
+            var dataTransferManager = Windows.ApplicationModel.DataTransfer.DataTransferManager.GetForCurrentView();
+            dataTransferManager.DataRequested += OnDataRequested;
+            Windows.ApplicationModel.DataTransfer.DataTransferManager.ShowShareUI();
+        }
+
+        private void OnDataRequested(Windows.ApplicationModel.DataTransfer.DataTransferManager sender, Windows.ApplicationModel.DataTransfer.DataRequestedEventArgs args)
+        {
+            var request = args.Request;
+            request.Data.Properties.Title = "Barometer Reading";
+            request.Data.SetText($"Current pressure: {ViewModel.CurrentPressureFormatted} {ViewModel.UnitMode}");
+            request.Data.Properties.Description = "Pressure reading from Barometer UWP app";
         }
     }
 }

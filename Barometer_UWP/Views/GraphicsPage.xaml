@@ -5,7 +5,7 @@
     xmlns:local="using:Barometer_UWP.Views"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:oxy="using:OxyPlot.Windows"
+    xmlns:lvc="using:LiveCharts.UWP"
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
@@ -16,8 +16,8 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <StackPanel Grid.Row="0" Padding="20" Background="{ThemeResource SystemControlBackgroundAltHighBrush}">
+        <!-- Header with Acrylic background -->
+        <StackPanel Grid.Row="0" Padding="20" Background="{ThemeResource SystemControlAcrylicElementBrush}">
             <TextBlock Text="Pressure Graphics" 
                        Style="{ThemeResource HeaderTextBlockStyle}" 
                        HorizontalAlignment="Center" 
@@ -26,8 +26,19 @@
 
         <!-- Chart Area -->
         <Grid Grid.Row="1" Padding="20">
-            <oxy:PlotView x:Name="PressurePlot" 
-                          Model="{x:Bind ViewModel.PressureData, Mode=OneWay}"/>
+            <lvc:CartesianChart x:Name="PressureChart" 
+                                Series="{x:Bind ViewModel.SeriesCollection, Mode=OneWay}"
+                                DisableAnimations="False"
+                                Hoverable="True"
+                                DataTooltip="{x:Bind ViewModel.ChartTooltip, Mode=OneWay}">
+                <lvc:CartesianChart.AxisX>
+                    <lvc:Axis Title="Time" Labels="{x:Bind ViewModel.DateTimeLabels, Mode=OneWay}" 
+                              ShowLabels="True"/>
+                </lvc:CartesianChart.AxisX>
+                <lvc:CartesianChart.AxisY>
+                    <lvc:Axis Title="Pressure" LabelFormatter="{x:Bind ViewModel.YFormatter, Mode=OneWay}"/>
+                </lvc:CartesianChart.AxisY>
+            </lvc:CartesianChart>
         </Grid>
 
         <!-- Controls -->
@@ -35,16 +46,19 @@
             <Button Content="Live Mode" 
                     Command="{x:Bind ViewModel.ToggleLiveModeCommand}" 
                     Margin="0,0,10,0"/>
-            <DatePicker x:Name="StartDatePicker" 
-                        Date="{x:Bind ViewModel.StartDate, Mode=TwoWay}" 
-                        Margin="0,0,10,0"/>
-            <DatePicker x:Name="EndDatePicker" 
-                        Date="{x:Bind ViewModel.EndDate, Mode=TwoWay}" 
-                        Margin="0,0,10,0"/>
-            <ComboBox x:Name="UnitComboBox" 
-                      ItemsSource="{x:Bind ViewModel.UnitMode, Mode=OneWay}" 
-                      SelectedItem="{x:Bind ViewModel.UnitMode, Mode=TwoWay}" 
+            <Button Content="Export PNG" 
+                    Command="{x:Bind ViewModel.ExportPngCommand}" 
+                    Margin="0,0,10,0"/>
+            <Button Content="Export XLSX" 
+                    Command="{x:Bind ViewModel.ExportXlsxCommand}" 
+                    Margin="0,0,10,0"/>
+            <ComboBox x:Name="PeriodComboBox" 
+                      ItemsSource="{x:Bind ViewModel.PeriodOptions, Mode=OneWay}" 
+                      SelectedItem="{x:Bind ViewModel.SelectedPeriod, Mode=TwoWay}" 
                       Margin="0,0,10,0"/>
+            <Button Content="Share" 
+                    Command="{x:Bind ViewModel.ShareCommand}" 
+                    Margin="0,0,10,0"/>
         </StackPanel>
     </Grid>
 </Page>
