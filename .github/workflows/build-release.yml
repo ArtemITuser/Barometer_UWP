@@ -55,12 +55,42 @@ jobs:
           [IO.File]::WriteAllBytes("$PWD\Barometer_UWP\Barometer_UWP_TemporaryKey.pfx", $bytes)
           Write-Host "Signing PFX restored ($( $bytes.Length ) bytes)"
 
-      - name: NuGet restore (msbuild)
-        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Restore /p:Configuration=Release /p:Platform=ARM
+      - name: NuGet restore (nuget.exe, then verify refs resolved)
+        shell: powershell
+        run: |
+          # nuget.exe (classic) resolves UAP/WinRT package refs more reliably than dotnet/msbuild restore on legacy csproj
+          Invoke-WebRequest -Uri https://dist.nuget.org/win-x86-commandline/v6.4.0/nuget.exe -OutFile $env:RUNNER_TEMP\nuget.exe
+          & $env:RUNNER_TEMP\nuget.exe restore Barometer_UWP.sln -ConfigFile nuget.config -Verbosity quiet
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::nuget restore failed"; exit 1 }
+          # Verify the WinRT projection assemblies actually landed in the global packages folder
+          $root = "$env:USERPROFILE\.nuget\packages"
+          foreach ($pkg in @('microsoft.netcore.universalwindowsplatform','newtonsoft.json','documentformat.openxml')) {
+            if (-not (Test-Path "$root\$pkg")) { Write-Host "::error::restore did not materialize $pkg into $root"; exit 1 }
+            Write-Host "OK: $pkg -> $((Get-ChildItem "$root\$pkg" | Select-Object -ExpandProperty Name) -join ', ')"
+          }
 
       - name: Build Release|ARM (ARM32, Lumia 950 / Elite x3)
         shell: cmd
-        run: msbuild Barometer_UWP\Barometer_UWP.csproj /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:AppxBundlePlatforms=\"ARM\" /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxPackageSigningEnabled=true /p:PackageCertificateKeyFile=Barometer_UWP_TemporaryKey.pfx /p:PackageCertificatePassword=barometer-ci /v:m /nologo
+        run: >
+          msbuild Barometer_UWP\Barometer_UWP.csproj
+          /p:Configuration=Release /p:Platform=ARM
+          /p:RestorePackages=false
+          /p:ResolveNuGetPackages=true
+          /p:AppxBundle=Always /p:AppxBundlePlatforms="ARM"
+          /p:UapAppxPackageBuildMode=SideloadOnly
+          /p:AppxPackageSigningEnabled=true
+          /p:PackageCertificateKeyFile=Barometer_UWP_TemporaryKey.pfx
+          /p:PackageCertificatePassword=barometer-ci
+          /p:AllowedTargetPlatformSdkVersionExclusions=
+          /v:m /nologo
+
+      - name: On build failure - dump resolved references (diagnostics)
+        if: failure()
+        shell: powershell
+        run: |
+          Get-Content Barometer_UWP\obj\ARM\Release\Barometer_UWP.csproj.nuget.g.props -ErrorAction SilentlyContinue | Select-Object -First 40
+          Write-Host "--- installed package roots:"
+          Get-ChildItem "$env:USERPROFILE\.nuget\packages" -Directory -ErrorAction SilentlyContinue | Select-Object -First 60 -ExpandProperty Name
 
       - name: Build Release|ARM64 (optional)
         if: ${{ inputs.build_arm64 }}
