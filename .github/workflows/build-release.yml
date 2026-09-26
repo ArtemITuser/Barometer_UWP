@@ -3,7 +3,7 @@ name: Build UWP release (ARM32/ARM64)
 on:
   push:
     tags:
-      - 'v*'          # автоматический релиз при пуше тега v1.4.0.3 и т.д.
+      - 'v*'          # автоматический релиз при пуше тега (например v1.4.0.3-deploy)
   workflow_dispatch:  # ручной запуск с выбором конфигурации
     inputs:
       build_arm64:
@@ -42,6 +42,19 @@ jobs:
             --includeRecommended --quiet --wait
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Restore signing certificate from secrets
+        shell: powershell
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+        run: |
+          if ([string]::IsNullOrEmpty($env:SIGNING_PFX_BASE64)) {
+            Write-Host "::warning::SIGNING_PFX_BASE64 secret is not set - package will be UNSIGNED (sideload on device will fail)"
+            exit 0
+          }
+          $bytes = [Convert]::FromBase64String($env:SIGNING_PFX_BASE64)
+          [IO.File]::WriteAllBytes("$PWD\Barometer_UWP\Barometer_UWP_TemporaryKey.pfx", $bytes)
+          Write-Host "Signing PFX restored ($( $bytes.Length ) bytes)"
+
       - name: NuGet restore
         run: nuget restore Barometer_UWP.sln
 
@@ -52,10 +65,21 @@ jobs:
         if: ${{ inputs.build_arm64 }}
         run: msbuild Barometer_UWP\Barometer_UWP.csproj /p:Configuration=Release /p:Platform=ARM64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /restore
 
+      - name: Export public signing certificate (for device trust install)
+        shell: powershell
+        run: |
+          $pfx = "Barometer_UWP\Barometer_UWP_TemporaryKey.pfx"
+          if (Test-Path $pfx) {
+            $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($pfx, '${{ secrets.SIGNING_PFX_PASSWORD }}')
+            [IO.File]::WriteAllBytes("artifacts_tmp_cert.cer", $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+          }
+
       - name: Collect artifacts
+        shell: powershell
         run: |
           mkdir artifacts
-          Get-ChildItem -Recurse Barometer_UWP\AppPackages -Include *.appx,*.appxbundle,*.appxsym | Copy-Item -Destination artifacts
+          Get-ChildItem -Recurse Barometer_UWP\AppPackages -Include *.appx,*.appxbundle,*.appxsym -ErrorAction SilentlyContinue | Copy-Item -Destination artifacts
+          if (Test-Path artifacts_tmp_cert.cer) { Copy-Item artifacts_tmp_cert.cer artifacts/ }
           Compress-Archive -Path Barometer_UWP -DestinationPath artifacts/Barometer_UWP-src.zip -Force
 
       - name: Upload to Release

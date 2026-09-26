@@ -6,7 +6,7 @@
     xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
     IgnorableNamespaces="uap3 mp">
 
-  <Identity Name="6280BarometerUWP.BarometerUWP" Publisher="CN=ArtemITuser" Version="1.4.0.2" ProcessorArchitecture="neutral" />
+  <Identity Name="6280BarometerUWP.BarometerUWP" Publisher="CN=ArtemITuser" Version="1.4.0.3" ProcessorArchitecture="neutral" />
 
   <mp:PhoneIdentity PhoneProductId="7c1e9a52-3f84-4d2b-9c31-5e2a7f9b4d10" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
