@@ -6,14 +6,19 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Windows.System.UserProfile;
-using Windows.UI.Xaml;
 using Barometer_UWP.Helpers;
 using Barometer_UWP.Models;
 using Barometer_UWP.Services;
 
 namespace Barometer_UWP.ViewModels
 {
-    public class SettingsViewModel : INotifyPropertyChanged
+    /// <summary>
+    /// Settings page view model (v1.4.0.1). Rewritten against the RC1 service
+    /// signatures: shared singletons from App.Current.Services, DataService local
+    /// backups, AuthService.IsSignedIn / SignInAsync():Task&lt;bool&gt;,
+    /// ScheduleService with ScheduleEntryInfo, OneDriveService name-based API.
+    /// </summary>
+    public class SettingsViewModel : INotifyPropertyChanged, IDisposable
     {
         private readonly DataService _dataService;
         private readonly ExportService _exportService;
@@ -24,106 +29,134 @@ namespace Barometer_UWP.ViewModels
         private readonly TileService _tileService;
         private readonly LocationService _locationService;
 
-        // Theme properties
-        private ThemeMode _selectedTheme;
-        private bool _useAutoTheme;
-        private string _selectedLanguage;
-        private bool _enableLocalBackup;
+        // Theme
+        private ThemeMode _selectedTheme = ThemeMode.Auto;
+        private bool _useAutoTheme = true;
+        private string _selectedLanguage = "ru-RU";
+
+        // Backup
+        private bool _enableLocalBackup = true;
         private bool _enableOneDriveBackup;
-        private string _selectedBackupFrequency;
-        private string _oneDriveStatus;
-        private int _collectionFrequency;
+        private string _selectedBackupFrequency = "Daily";
+        private string _oneDriveStatus = "Not signed in";
+
+        // Collection schedule
+        private int _collectionFrequency = 60;
         private bool _useNightMode;
-        private string _selectedTilePeriod;
-        private bool _showChartOnTile;
-        private string _selectedTileStyle;
+
+        // Tile
+        private string _selectedTilePeriod = "24h";
+        private bool _showChartOnTile = true;
+        private string _selectedTileStyle = "System";
+
+        private bool _disposed;
 
         public SettingsViewModel()
         {
-            _dataService = App.Current.Services.DataService;
-            _exportService = new ExportService();
-            _oneDriveService = App.Current.Services.OneDriveService;
-            _authService = App.Current.Services.AuthService;
-            _updateService = new UpdateService();
-            _scheduleService = App.Current.Services.ScheduleService;
-            _tileService = new TileService();
-            _locationService = new LocationService();
+            var services = App.Current?.Services;
+            _dataService = services?.DataService ?? new DataService();
+            _exportService = services?.ExportService ?? new ExportService();
+            _oneDriveService = services?.OneDriveService;
+            _authService = services?.AuthService;
+            _updateService = services?.UpdateService ?? new UpdateService();
+            _scheduleService = services?.ScheduleService ?? new ScheduleService();
+            _tileService = services?.TileService ?? new TileService();
+            _locationService = services?.LocationService ?? new LocationService();
 
-            // Initialize properties
-            _selectedTheme = ThemeMode.Auto;
-            _useAutoTheme = true;
-            _selectedLanguage = "ru-RU";
-            _enableLocalBackup = true;
-            _enableOneDriveBackup = false;
-            _selectedBackupFrequency = "Weekly";
-            _oneDriveStatus = "Not signed in";
-            _collectionFrequency = 60; // Default to 60 seconds
-            _useNightMode = false;
-            _selectedTilePeriod = "24h";
-            _showChartOnTile = true;
-            _selectedTileStyle = "System";
+            if (_authService != null) _authService.AuthStateChanged += OnAuthStateChanged;
+            if (_scheduleService != null) _scheduleService.Changed += OnScheduleChanged;
 
-            // Initialize commands
-            ExportCsvCommand = new RelayCommand(ExportCsv);
-            ExportXlsxCommand = new RelayCommand(ExportXlsx);
-            ExportTxtCommand = new RelayCommand(ExportTxt);
-            ImportCsvCommand = new RelayCommand(ImportCsv);
-            ImportXlsxCommand = new RelayCommand(ImportXlsx);
-            SignInToOneDriveCommand = new RelayCommand(SignInToOneDrive);
-            SignOutFromOneDriveCommand = new RelayCommand(SignOutFromOneDrive);
-            CheckForUpdatesCommand = new RelayCommand(CheckForUpdates);
-            BackupNowCommand = new RelayCommand(BackupNow);
-            RestoreFromOneDriveCommand = new RelayCommand(RestoreFromOneDrive);
-            AddScheduleCommand = new RelayCommand(AddSchedule);
-            RemoveScheduleCommand = new RelayCommand(RemoveSchedule);
+            LoadFromSettings();
 
-            // Initialize collections
+            ExportCsvCommand = new RelayCommand(async _ => await ExportAsync("csv"));
+            ExportXlsxCommand = new RelayCommand(async _ => await ExportAsync("xlsx"));
+            ExportTxtCommand = new RelayCommand(async _ => await ExportAsync("txt"));
+            ImportCsvCommand = new RelayCommand(async _ => await ImportAsync("csv"));
+            ImportXlsxCommand = new RelayCommand(async _ => await ImportAsync("xlsx"));
+            SignInToOneDriveCommand = new RelayCommand(async _ => await SignInAsync());
+            SignOutFromOneDriveCommand = new RelayCommand(_ => SignOut());
+            CheckForUpdatesCommand = new RelayCommand(async _ => await CheckForUpdatesAsync());
+            BackupNowCommand = new RelayCommand(async _ => await BackupNowAsync());
+            RestoreFromOneDriveCommand = new RelayCommand(async _ => await RestoreFromOneDriveAsync());
+            AddScheduleCommand = new RelayCommand(_ => AddSchedule());
+            RemoveScheduleCommand = new RelayCommand(p => RemoveSchedule(p));
+
             ThemeOptions = new ObservableCollection<string> { "Light", "Dark", "Auto" };
             LanguageOptions = new ObservableCollection<string> { "en-US", "ru-RU" };
             BackupFrequencyOptions = new ObservableCollection<string> { "Hourly", "Daily", "Weekly", "Monthly" };
             TilePeriodOptions = new ObservableCollection<string> { "1h", "6h", "24h", "7d" };
             TileStyleOptions = new ObservableCollection<string> { "System", "Custom" };
-            ScheduleEntries = new ObservableCollection<ScheduleEntry>();
+            ScheduleEntries = new ObservableCollection<ScheduleEntryInfo>();
+            ReloadScheduleList();
         }
 
-        public async void Initialize()
-        {
-            // Update OneDrive status
-            var isAuthenticated = await _authService.IsAuthenticatedAsync();
-            OneDriveStatus = isAuthenticated ? "Signed in" : "Not signed in";
+        // ---- persistence ------------------------------------------------------
 
-            // Load schedule entries
-            await LoadScheduleEntries();
-        }
+        private static Windows.Storage.ApplicationDataContainer Local =>
+            Windows.Storage.ApplicationData.Current.LocalSettings;
 
-        private async Task LoadScheduleEntries()
+        private void LoadFromSettings()
         {
-            var entries = await _scheduleService.GetAllEntriesAsync();
-            ScheduleEntries.Clear();
-            foreach (var entry in entries)
+            try
             {
-                ScheduleEntries.Add(entry);
+                object v;
+                if (Local.Values.TryGetValue("SelectedTheme", out v) && v is int ti)
+                    _selectedTheme = (ThemeMode)ti;
+                if (Local.Values.TryGetValue("UseAutoTheme", out v) && v is bool aub)
+                    _useAutoTheme = aub;
+                if (Local.Values.TryGetValue("SelectedLanguage", out v) && v is string lgs)
+                    _selectedLanguage = lgs;
+                if (Local.Values.TryGetValue("EnableLocalBackup", out v) && v is bool lbb)
+                    _enableLocalBackup = lbb;
+                if (Local.Values.TryGetValue("EnableOneDriveBackup", out v) && v is bool obb)
+                    _enableOneDriveBackup = obb;
+                if (Local.Values.TryGetValue("SelectedBackupFrequency", out v) && v is string bfs)
+                    _selectedBackupFrequency = bfs;
+                if (Local.Values.TryGetValue("CollectionFrequency", out v) && v is int cfi)
+                    _collectionFrequency = cfi;
+                if (Local.Values.TryGetValue("UseNightMode", out v) && v is bool nmb)
+                    _useNightMode = nmb;
+                if (Local.Values.TryGetValue("SelectedTilePeriod", out v) && v is string tps)
+                    _selectedTilePeriod = tps;
+                if (Local.Values.TryGetValue("ShowChartOnTile", out v) && v is bool scb)
+                    _showChartOnTile = scb;
+                if (Local.Values.TryGetValue("SelectedTileStyle", out v) && v is string tss)
+                    _selectedTileStyle = tss;
             }
+            catch { }
         }
 
-        public async Task SaveSettingsAsync()
+        public Task SaveSettingsAsync()
         {
-            // Save theme settings
-            var settings = Windows.Storage.ApplicationData.Current.LocalSettings;
-            settings.Values["SelectedTheme"] = (int)_selectedTheme;
-            settings.Values["UseAutoTheme"] = _useAutoTheme;
-            settings.Values["SelectedLanguage"] = _selectedLanguage;
-            settings.Values["EnableLocalBackup"] = _enableLocalBackup;
-            settings.Values["EnableOneDriveBackup"] = _enableOneDriveBackup;
-            settings.Values["SelectedBackupFrequency"] = _selectedBackupFrequency;
-            settings.Values["CollectionFrequency"] = _collectionFrequency;
-            settings.Values["UseNightMode"] = _useNightMode;
-            settings.Values["SelectedTilePeriod"] = _selectedTilePeriod;
-            settings.Values["ShowChartOnTile"] = _showChartOnTile;
-            settings.Values["SelectedTileStyle"] = _selectedTileStyle;
+            try
+            {
+                Local.Values["SelectedTheme"] = (int)_selectedTheme;
+                Local.Values["UseAutoTheme"] = _useAutoTheme;
+                Local.Values["SelectedLanguage"] = _selectedLanguage;
+                Local.Values["EnableLocalBackup"] = _enableLocalBackup;
+                Local.Values["EnableOneDriveBackup"] = _enableOneDriveBackup;
+                Local.Values["SelectedBackupFrequency"] = _selectedBackupFrequency;
+                Local.Values["CollectionFrequency"] = _collectionFrequency;
+                Local.Values["UseNightMode"] = _useNightMode;
+                Local.Values["SelectedTilePeriod"] = _selectedTilePeriod;
+                Local.Values["ShowChartOnTile"] = _showChartOnTile;
+                Local.Values["SelectedTileStyle"] = _selectedTileStyle;
+            }
+            catch { }
+            return Task.CompletedTask;
         }
+
+        public void Initialize()
+        {
+            RefreshAuthStatus();
+        }
+
+        // ---- properties ---------------------------------------------------------
 
         #region Theme Properties
+        public ObservableCollection<string> ThemeOptions { get; }
+        public ObservableCollection<string> LanguageOptions { get; }
+
         public ThemeMode SelectedTheme
         {
             get => _selectedTheme;
@@ -132,6 +165,7 @@ namespace Barometer_UWP.ViewModels
                 _selectedTheme = value;
                 OnPropertyChanged();
                 ApplyTheme();
+                _ = SaveSettingsAsync();
             }
         }
 
@@ -142,15 +176,10 @@ namespace Barometer_UWP.ViewModels
             {
                 _useAutoTheme = value;
                 OnPropertyChanged();
-                if (value)
-                {
-                    ApplyAutoTheme();
-                }
+                _ = SaveSettingsAsync();
+                if (value) ApplyAutoTheme();
             }
         }
-
-        public ObservableCollection<string> ThemeOptions { get; }
-        public ObservableCollection<string> LanguageOptions { get; }
 
         public string SelectedLanguage
         {
@@ -160,6 +189,7 @@ namespace Barometer_UWP.ViewModels
                 _selectedLanguage = value;
                 OnPropertyChanged();
                 ApplyLanguage();
+                _ = SaveSettingsAsync();
             }
         }
         #endregion
@@ -168,21 +198,13 @@ namespace Barometer_UWP.ViewModels
         public bool EnableLocalBackup
         {
             get => _enableLocalBackup;
-            set
-            {
-                _enableLocalBackup = value;
-                OnPropertyChanged();
-            }
+            set { _enableLocalBackup = value; OnPropertyChanged(); _ = SaveSettingsAsync(); }
         }
 
         public bool EnableOneDriveBackup
         {
             get => _enableOneDriveBackup;
-            set
-            {
-                _enableOneDriveBackup = value;
-                OnPropertyChanged();
-            }
+            set { _enableOneDriveBackup = value; OnPropertyChanged(); _ = SaveSettingsAsync(); }
         }
 
         public ObservableCollection<string> BackupFrequencyOptions { get; }
@@ -190,21 +212,13 @@ namespace Barometer_UWP.ViewModels
         public string SelectedBackupFrequency
         {
             get => _selectedBackupFrequency;
-            set
-            {
-                _selectedBackupFrequency = value;
-                OnPropertyChanged();
-            }
+            set { _selectedBackupFrequency = value; OnPropertyChanged(); _ = SaveSettingsAsync(); }
         }
 
         public string OneDriveStatus
         {
             get => _oneDriveStatus;
-            private set
-            {
-                _oneDriveStatus = value;
-                OnPropertyChanged();
-            }
+            private set { _oneDriveStatus = value; OnPropertyChanged(); }
         }
         #endregion
 
@@ -212,24 +226,23 @@ namespace Barometer_UWP.ViewModels
         public int CollectionFrequency
         {
             get => _collectionFrequency;
-            set
-            {
-                _collectionFrequency = value;
-                OnPropertyChanged();
-            }
+            set { _collectionFrequency = value; OnPropertyChanged(); _ = SaveSettingsAsync(); }
         }
 
         public bool UseNightMode
         {
             get => _useNightMode;
-            set
-            {
-                _useNightMode = value;
-                OnPropertyChanged();
-            }
+            set { _useNightMode = value; OnPropertyChanged(); _ = SaveSettingsAsync(); }
         }
 
-        public ObservableCollection<ScheduleEntry> ScheduleEntries { get; }
+        public ObservableCollection<ScheduleEntryInfo> ScheduleEntries { get; }
+
+        private ScheduleEntryInfo _selectedScheduleEntry;
+        public ScheduleEntryInfo SelectedScheduleEntry
+        {
+            get => _selectedScheduleEntry;
+            set { _selectedScheduleEntry = value; OnPropertyChanged(); }
+        }
         #endregion
 
         #region Tile Properties
@@ -238,21 +251,13 @@ namespace Barometer_UWP.ViewModels
         public string SelectedTilePeriod
         {
             get => _selectedTilePeriod;
-            set
-            {
-                _selectedTilePeriod = value;
-                OnPropertyChanged();
-            }
+            set { _selectedTilePeriod = value; OnPropertyChanged(); _ = SaveSettingsAsync(); }
         }
 
         public bool ShowChartOnTile
         {
             get => _showChartOnTile;
-            set
-            {
-                _showChartOnTile = value;
-                OnPropertyChanged();
-            }
+            set { _showChartOnTile = value; OnPropertyChanged(); _ = SaveSettingsAsync(); }
         }
 
         public ObservableCollection<string> TileStyleOptions { get; }
@@ -260,11 +265,7 @@ namespace Barometer_UWP.ViewModels
         public string SelectedTileStyle
         {
             get => _selectedTileStyle;
-            set
-            {
-                _selectedTileStyle = value;
-                OnPropertyChanged();
-            }
+            set { _selectedTileStyle = value; OnPropertyChanged(); _ = SaveSettingsAsync(); }
         }
         #endregion
 
@@ -283,178 +284,191 @@ namespace Barometer_UWP.ViewModels
         public ICommand RemoveScheduleCommand { get; }
         #endregion
 
-        #region Command Implementations
-        private async void ExportCsv(object parameter)
+        #region Command implementations
+        private async Task ExportAsync(string kind)
         {
-            await _exportService.ExportCsvAsync(null, await _dataService.LoadAsync(), CultureInfo.CurrentUICulture);
-        }
-
-        private async void ExportXlsx(object parameter)
-        {
-            await _exportService.ExportXlsxAsync(null, await _dataService.LoadAsync(), CultureInfo.CurrentUICulture);
-        }
-
-        private async void ExportTxt(object parameter)
-        {
-            await _exportService.ExportTxtAsync(null, await _dataService.LoadAsync(), CultureInfo.CurrentUICulture);
-        }
-
-        private async void ImportCsv(object parameter)
-        {
-            await _exportService.ImportCsvAsync(null, CultureInfo.CurrentUICulture);
-        }
-
-        private async void ImportXlsx(object parameter)
-        {
-            await _exportService.ImportXlsxAsync(null);
-        }
-
-        private async void SignInToOneDrive(object parameter)
-        {
-            var success = await _authService.SignInAsync();
-            if (success)
+            var records = _dataService.GetAll();
+            switch (kind)
             {
-                OneDriveStatus = "Signed in";
+                case "csv":
+                    await _exportService.ExportCsvAsync(null, records, CultureInfo.CurrentUICulture);
+                    break;
+                case "txt":
+                    await _exportService.ExportTxtAsync(null, records, CultureInfo.CurrentUICulture);
+                    break;
+                default:
+                    await _exportService.ExportXlsxAsync(null, records, CultureInfo.CurrentUICulture);
+                    break;
             }
         }
 
-        private async void SignOutFromOneDrive(object parameter)
+        private async Task ImportAsync(string kind)
         {
-            await _authService.SignOutAsync();
+            if (kind == "csv")
+                await _exportService.ImportCsvAsync(null, CultureInfo.CurrentUICulture);
+            else
+                await _exportService.ImportXlsxAsync(null);
+        }
+
+        private async Task SignInAsync()
+        {
+            if (_authService == null) return;
+            bool ok = await _authService.SignInAsync();
+            OneDriveStatus = ok ? "Signed in" : "Sign-in failed";
+        }
+
+        private void SignOut()
+        {
+            _authService?.SignOut();
             OneDriveStatus = "Not signed in";
         }
 
-        private async void CheckForUpdates(object parameter)
+        private void OnAuthStateChanged()
         {
-            await _updateService.CheckForUpdatesAsync();
+            var d = Windows.UI.Xaml.Window.Current?.Dispatcher;
+            if (d != null && !d.HasThreadAccess)
+            {
+                _ = d.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, RefreshAuthStatus);
+                return;
+            }
+            RefreshAuthStatus();
         }
 
-        private async void BackupNow(object parameter)
+        private void RefreshAuthStatus()
         {
-            // Perform backup to local storage
-            if (EnableLocalBackup)
+            OneDriveStatus = (_authService != null && _authService.IsSignedIn)
+                ? "Signed in" : "Not signed in";
+        }
+
+        private async Task CheckForUpdatesAsync()
+        {
+            try
+            {
+                var release = await _updateService.GetLatestReleaseAsync();
+                if (release != null)
+                    await Windows.System.Launcher.LaunchUriAsync(new Uri(release.Url));
+            }
+            catch { }
+        }
+
+        private async Task BackupNowAsync()
+        {
+            byte[] bytes = null;
+            string name = null;
+
+            if (_enableLocalBackup)
+            {
+                var res = await _dataService.CreateLocalBackupAsync();
+                if (res != null) { name = res.Name; bytes = res.Bytes; }
+            }
+            else if (_enableOneDriveBackup)
             {
                 await _dataService.SaveAsync();
+                var file = await Windows.Storage.ApplicationData.Current.LocalFolder
+                    .GetFileAsync(DataService.FileName);
+                var json = await Windows.Storage.FileIO.ReadTextAsync(file);
+                name = DataService.MakeBackupFileName(DateTime.UtcNow);
+                bytes = System.Text.Encoding.UTF8.GetBytes(json);
             }
 
-            // Perform backup to OneDrive if enabled
-            if (EnableOneDriveBackup)
+            if (bytes != null && _enableOneDriveBackup &&
+                _oneDriveService != null && _oneDriveService.IsAvailable)
             {
-                var isAuthenticated = await _authService.IsAuthenticatedAsync();
-                if (isAuthenticated)
-                {
-                    var data = await _dataService.LoadAsync();
-                    var fileName = $"backup_{DateTime.Now:yyyyMMdd_HHmmss}.json";
-                    var jsonData = Newtonsoft.Json.JsonConvert.SerializeObject(data);
-                    await _oneDriveService.UploadBackupAsync(fileName, System.Text.Encoding.UTF8.GetBytes(jsonData));
-                }
+                await _oneDriveService.UploadBackupAsync(name, bytes);
             }
         }
 
-        private async void RestoreFromOneDrive(object parameter)
+        private async Task RestoreFromOneDriveAsync()
         {
-            var isAuthenticated = await _authService.IsAuthenticatedAsync();
-            if (isAuthenticated)
-            {
-                var backups = await _oneDriveService.ListBackupsAsync();
-                if (backups.Count > 0)
-                {
-                    // For simplicity, restore the most recent backup
-                    var latestBackup = backups[backups.Count - 1];
-                    var data = await _oneDriveService.DownloadBackupAsync(latestBackup);
-                    var jsonString = System.Text.Encoding.UTF8.GetString(data);
-                    var records = Newtonsoft.Json.JsonConvert.DeserializeObject<System.Collections.Generic.List<PressureRecord>>(jsonString);
-                    
-                    await _dataService.ClearAsync();
-                    foreach (var record in records)
-                    {
-                        await _dataService.AddAsync(record);
-                    }
-                }
-            }
+            if (_oneDriveService == null || !_oneDriveService.IsAvailable) return;
+            var backups = await _oneDriveService.ListBackupsAsync();
+            if (backups.Count == 0) return;
+            var latest = backups[backups.Count - 1];
+            var data = await _oneDriveService.DownloadBackupAsync(latest.Name);
+            var json = System.Text.Encoding.UTF8.GetString(data, 0, data.Length);
+            await _dataService.RestoreFromJsonAsync(json);
         }
 
-        private void AddSchedule(object parameter)
+        private void AddSchedule()
         {
-            // For simplicity, add a default schedule entry
-            var newEntry = new ScheduleEntry
+            _scheduleService.Add(new ScheduleEntryInfo
             {
-                Id = Guid.NewGuid(),
-                Interval = TimeSpan.FromMinutes(30),
-                Start = TimeSpan.FromHours(8), // 8 AM
-                End = TimeSpan.FromHours(22),   // 10 PM
+                StartMinutes = 8 * 60,
+                EndMinutes = 22 * 60 - 1,
+                IntervalSeconds = Math.Max(5, _collectionFrequency),
                 Enabled = true
-            };
-            ScheduleEntries.Add(newEntry);
+            });
         }
 
         private void RemoveSchedule(object parameter)
         {
-            // For simplicity, remove the last entry
-            if (ScheduleEntries.Count > 0)
+            var entry = parameter as ScheduleEntryInfo ?? SelectedScheduleEntry;
+            if (entry != null) _scheduleService.Remove(entry.Id);
+            else if (ScheduleEntries.Count > 0)
+                _scheduleService.Remove(ScheduleEntries[ScheduleEntries.Count - 1].Id);
+        }
+
+        private void OnScheduleChanged()
+        {
+            var d = Windows.UI.Xaml.Window.Current?.Dispatcher;
+            if (d != null && !d.HasThreadAccess)
             {
-                ScheduleEntries.RemoveAt(ScheduleEntries.Count - 1);
+                _ = d.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, ReloadScheduleList);
+                return;
             }
+            ReloadScheduleList();
+        }
+
+        private void ReloadScheduleList()
+        {
+            ScheduleEntries.Clear();
+            foreach (var e in _scheduleService.GetEntries())
+                ScheduleEntries.Add(e);
         }
         #endregion
 
-        #region Helper Methods
+        #region Helper methods
         private void ApplyTheme()
         {
-            // Apply the selected theme to the application
-            switch (_selectedTheme)
-            {
-                case ThemeMode.Light:
-                    Application.Current.RequestedTheme = ApplicationTheme.Light;
-                    break;
-                case ThemeMode.Dark:
-                    Application.Current.RequestedTheme = ApplicationTheme.Dark;
-                    break;
-                case ThemeMode.Auto:
-                    // Auto theme is handled separately
-                    break;
-            }
+            // RequestedTheme is fixed at launch; the choice is persisted and applied
+            // by ThemeHelper on the next app start.
+            _ = SaveSettingsAsync();
         }
 
         private async void ApplyAutoTheme()
         {
-            // Calculate sunrise/sunset based on location and apply theme accordingly
-            var location = await _locationService.GetLocationAsync();
-            if (location != null)
+            try
             {
-                var sunriseSunset = await _locationService.GetSunriseSunsetAsync(location.Latitude, location.Longitude, DateTime.Now);
+                var pos = await _locationService.GetCurrentLocationAsync();
+                if (pos == null) return;
+                double lat = pos.Coordinate.Point.Position.Latitude;
+                double lon = pos.Coordinate.Point.Position.Longitude;
+                var sun = await _locationService.GetSunriseSunsetAsync(lat, lon, DateTime.Now);
                 var now = DateTime.Now.TimeOfDay;
-
-                if (now < sunriseSunset.Sunrise.TimeOfDay || now > sunriseSunset.Sunset.TimeOfDay)
-                {
-                    // Night time - use dark theme
-                    Application.Current.RequestedTheme = ApplicationTheme.Dark;
-                }
-                else
-                {
-                    // Day time - use light theme
-                    Application.Current.RequestedTheme = ApplicationTheme.Light;
-                }
+                bool night = now < sun.Sunrise.TimeOfDay || now > sun.Sunset.TimeOfDay;
+                Local.Values["AutoThemeNight"] = night;
             }
+            catch { }
         }
 
         private void ApplyLanguage()
         {
-            // Apply the selected language to the application
-            ApplicationLanguages.PrimaryLanguageOverride = _selectedLanguage;
+            try { ApplicationLanguages.PrimaryLanguageOverride = _selectedLanguage; }
+            catch { }
         }
         #endregion
 
         public event PropertyChangedEventHandler PropertyChanged;
-
-        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
-        {
+        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null) =>
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
 
         public void Dispose()
         {
-            _ = SaveSettingsAsync(); // Save settings when disposed
+            if (_disposed) return;
+            _disposed = true;
+            if (_authService != null) _authService.AuthStateChanged -= OnAuthStateChanged;
+            if (_scheduleService != null) _scheduleService.Changed -= OnScheduleChanged;
+            _ = SaveSettingsAsync();
         }
     }
 }
