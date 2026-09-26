@@ -1,0 +1,74 @@
+name: Build UWP release (ARM32/ARM64)
+
+on:
+  push:
+    tags:
+      - 'v*'          # автоматический релиз при пуше тега v1.4.0.3 и т.д.
+  workflow_dispatch:  # ручной запуск с выбором конфигурации
+    inputs:
+      build_arm64:
+        description: 'Также собрать ARM64'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write     # нужно для создания GitHub Release и загрузки ассетов
+
+env:
+  NET_SDK: '8.0.x'    # dotnet нужен только для restore; саму сборку делает MSBuild из VS image
+
+jobs:
+  build-arm:
+    name: Build Release|ARM
+    runs-on: windows-latest   # образ Windows содержит VS 2022 + UWP-компоненты
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup .NET SDK (for restore)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.NET_SDK }}
+
+      - name: Install UWP workload components (VS Installer)
+        shell: powershell
+        run: |
+          $exe = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+          & $exe modify --installPath "C:\Program Files\Microsoft Visual Studio\2022\Enterprise" `
+            --add Microsoft.Component.MSBuild `
+            --add Microsoft.VisualStudio.Workload.UniversalBuildTools `
+            --includeRecommended --quiet --wait
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: NuGet restore
+        run: nuget restore Barometer_UWP.sln
+
+      - name: Build Release|ARM (ARM32, Lumia 950 / Elite x3)
+        run: msbuild Barometer_UWP\Barometer_UWP.csproj /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /restore
+
+      - name: Build Release|ARM64 (optional)
+        if: ${{ inputs.build_arm64 }}
+        run: msbuild Barometer_UWP\Barometer_UWP.csproj /p:Configuration=Release /p:Platform=ARM64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /restore
+
+      - name: Collect artifacts
+        run: |
+          mkdir artifacts
+          Get-ChildItem -Recurse Barometer_UWP\AppPackages -Include *.appx,*.appxbundle,*.appxsym | Copy-Item -Destination artifacts
+          Compress-Archive -Path Barometer_UWP -DestinationPath artifacts/Barometer_UWP-src.zip -Force
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: artifacts/*
+          draft: false
+          generate_release_notes: true
+
+      - name: Upload workflow artifacts (для workflow_dispatch)
+        uses: actions/upload-artifact@v4
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        with:
+          name: barometer-appx
+          path: artifacts/
