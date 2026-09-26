@@ -10,6 +10,8 @@ Global
 		Debug|x86 = Debug|x86
 		Release|ARM = Release|ARM
 		Release|x86 = Release|x86
+		Debug|ARM64 = Debug|ARM64
+		Release|ARM64 = Release|ARM64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{C8D8B5A6-8C5A-4C5A-8C5A-4C5A8C5A8C5A}.Debug|ARM.ActiveCfg = Debug|ARM
@@ -20,6 +22,10 @@ Global
 		{C8D8B5A6-8C5A-4C5A-8C5A-4C5A8C5A8C5A}.Release|ARM.Build.0 = Release|ARM
 		{C8D8B5A6-8C5A-4C5A-8C5A-4C5A8C5A8C5A}.Release|x86.ActiveCfg = Release|x86
 		{C8D8B5A6-8C5A-4C5A-8C5A-4C5A8C5A8C5A}.Release|x86.Build.0 = Release|x86
+		{C8D8B5A6-8C5A-4C5A-8C5A-4C5A8C5A8C5A}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{C8D8B5A6-8C5A-4C5A-8C5A-4C5A8C5A8C5A}.Debug|ARM64.Build.0 = Debug|ARM64
+		{C8D8B5A6-8C5A-4C5A-8C5A-4C5A8C5A8C5A}.Release|ARM64.ActiveCfg = Release|ARM64
+		{C8D8B5A6-8C5A-4C5A-8C5A-4C5A8C5A8C5A}.Release|ARM64.Build.0 = Release|ARM64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

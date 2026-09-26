@@ -55,15 +55,17 @@ jobs:
           [IO.File]::WriteAllBytes("$PWD\Barometer_UWP\Barometer_UWP_TemporaryKey.pfx", $bytes)
           Write-Host "Signing PFX restored ($( $bytes.Length ) bytes)"
 
-      - name: NuGet restore
-        run: nuget restore Barometer_UWP.sln
+      - name: NuGet restore (msbuild)
+        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Restore /p:Configuration=Release /p:Platform=ARM
 
       - name: Build Release|ARM (ARM32, Lumia 950 / Elite x3)
-        run: msbuild Barometer_UWP\Barometer_UWP.csproj /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /restore
+        shell: cmd
+        run: msbuild Barometer_UWP\Barometer_UWP.csproj /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:AppxBundlePlatforms=\"ARM\" /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxPackageSigningEnabled=true /p:PackageCertificateKeyFile=Barometer_UWP_TemporaryKey.pfx /p:PackageCertificatePassword=barometer-ci /v:m /nologo
 
       - name: Build Release|ARM64 (optional)
         if: ${{ inputs.build_arm64 }}
-        run: msbuild Barometer_UWP\Barometer_UWP.csproj /p:Configuration=Release /p:Platform=ARM64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /restore
+        shell: cmd
+        run: msbuild Barometer_UWP\Barometer_UWP.csproj /p:Configuration=Release /p:Platform=ARM64 /p:AppxBundle=Always /p:AppxBundlePlatforms=\"ARM64\" /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxPackageSigningEnabled=true /p:PackageCertificateKeyFile=Barometer_UWP_TemporaryKey.pfx /p:PackageCertificatePassword=barometer-ci /v:m /nologo
 
       - name: Export public signing certificate (for device trust install)
         shell: powershell
