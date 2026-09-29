@@ -437,18 +437,57 @@ namespace Barometer_UWP.ViewModels
 
         private async void ApplyAutoTheme()
         {
+            // BUGFIX v1.4.0.3: раньше «карта неба»/авто-тема использовала приближённый
+            // расчёт восхода-заката без учёта долготы и часового пояса (ошибка до |lon|/15 ч),
+            // а сравнение TimeOfDay давало неверную ночь при переходе через полночь
+            // (например, 23:30 считалось днём, т.к. Sunrise.TimeOfDay="06:xx" > now).
+            // Теперь: полноценный NOAA-итерационный алгоритм SkyMap.GetSunTimes +
+            // корректная граница ночи [закат .. рассвет] с оборотом через полночь.
             try
             {
                 var pos = await _locationService.GetCurrentLocationAsync();
-                if (pos == null) return;
-                double lat = pos.Coordinate.Point.Position.Latitude;
-                double lon = pos.Coordinate.Point.Position.Longitude;
-                var sun = await _locationService.GetSunriseSunsetAsync(lat, lon, DateTime.Now);
-                var now = DateTime.Now.TimeOfDay;
-                bool night = now < sun.Sunrise.TimeOfDay || now > sun.Sunset.TimeOfDay;
+                double lat, lon;
+                if (pos != null)
+                {
+                    lat = pos.Coordinate.Point.Position.Latitude;
+                    lon = pos.Coordinate.Point.Position.Longitude;
+                }
+                else
+                {
+                    // Fallback: сохранённые координаты или Москва (нет GPS — тема всё равно должна работать)
+                    lat = (double)(Local.Values["LastLat"] ?? 55.7558);
+                    lon = (double)(Local.Values["LastLon"] ?? 37.6173);
+                }
+
+                var localNow = DateTime.Now;
+                double tzOffset = TimeZoneInfo.Local.GetUtcOffset(localNow).TotalHours;
+                var sunTimes = Barometer_UWP.Helpers.SkyMap.GetSunTimes(lat, lon, localNow.Date, tzOffset);
+
+                bool night;
+                if (sunTimes.Rise.HasValue && sunTimes.Set.HasValue)
+                {
+                    DateTime rise = sunTimes.Rise.Value, set = sunTimes.Set.Value;
+                    // Ночь = после заката ИЛИ до рассвета (корректно оборачивается через полночь)
+                    night = localNow >= set || localNow < rise;
+                }
+                else
+                {
+                    // Полярный день/ночь: определяем по высоте Солнца
+                    var eq = Barometer_UWP.Helpers.SkyMap.SunPosition(localNow.ToUniversalTime());
+                    var hor = Barometer_UWP.Helpers.SkyMap.EquatorialToHorizontal(eq.RaDeg, eq.DecDeg, lat, lon, localNow.ToUniversalTime());
+                    night = hor.Altitude < -6.0; // гражданские сумерки
+                }
+
+                Local.Values["LastLat"] = lat;
+                Local.Values["LastLon"] = lon;
                 Local.Values["AutoThemeNight"] = night;
+                if (sunTimes.Rise.HasValue) Local.Values["LastSunrise"] = sunTimes.Rise.Value.ToString("o");
+                if (sunTimes.Set.HasValue) Local.Values["LastSunset"] = sunTimes.Set.Value.ToString("o");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _ = Barometer_UWP.Helpers.Logger.LogErrorAsync("ApplyAutoTheme failed", ex);
+            }
         }
 
         private void ApplyLanguage()

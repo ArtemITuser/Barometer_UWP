@@ -71,6 +71,7 @@
     </Compile>
     <Compile Include="BackgroundTasks\BackupTask.cs" />
     <Compile Include="Helpers\BackgroundHelper.cs" />
+    <Compile Include="Helpers\SkyMap.cs" />
     <Compile Include="Helpers\ChartRenderer.cs" />
     <Compile Include="Helpers\ImageEncoder.cs" />
     <Compile Include="Helpers\WriteableBitmapEx.cs" />
