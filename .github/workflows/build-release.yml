@@ -3,7 +3,7 @@ name: Build UWP release (ARM32/ARM64)
 on:
   push:
     tags:
-      - 'v*'          # автоматический релиз при пуше тега v1.4.0.3 и т.д.
+      - 'v*'          # автоматический релиз при пуше тега v1.4.0.x
   workflow_dispatch:  # ручной запуск с выбором конфигурации
     inputs:
       build_arm64:
@@ -14,23 +14,20 @@ on:
 permissions:
   contents: write     # нужно для создания GitHub Release и загрузки ассетов
 
-env:
-  NET_SDK: '8.0.x'    # dotnet нужен только для restore; саму сборку делает MSBuild из VS image
-
 jobs:
   build-arm:
     name: Build Release|ARM
-    runs-on: windows-latest   # образ Windows содержит VS 2022 + UWP-компоненты
+    runs-on: windows-2022   # VS2022 image; classic UWP toolchain verified here
     steps:
       - uses: actions/checkout@v4
 
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      - name: Setup .NET SDK (for restore)
+      - name: Setup .NET SDK 6.0 (classic UWP-compatible; newer SDKs break UWP 6.x metapackage resolution)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.NET_SDK }}
+          dotnet-version: '6.0.x'
 
       - name: Install UWP workload components (VS Installer)
         shell: powershell
@@ -42,22 +39,37 @@ jobs:
             --includeRecommended --quiet --wait
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: NuGet restore (packages.config style - wires UWP .NET Native toolchain correctly)
-        run: nuget restore Barometer_UWP.sln
-
-      - name: Verify UWP metapackage restored (fail fast with diagnostics)
+      - name: Pin UAP targets to installed Windows SDK version
         shell: powershell
         run: |
-          $meta = "packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8"
-          if (-not (Test-Path $meta)) { Write-Host "::error::UWP metapackage not restored to packages folder"; exit 1 }
-          Get-ChildItem $meta | Select-Object -First 5 Name
+          # Classic UWP csproj resolves WinRT projections + netcore reference assemblies via
+          # $(TargetPlatformVersion)=10.0.15254.0. Runner images ship newer Kits only, so the
+          # 15254 facades are absent -> every System.* / Windows.* type fails (CS0012/CS0234/CS0246).
+          # We keep the manifest at 15254 (runtime contract) but compile against the newest
+          # installed UAP surface, which is backward compatible down to MinVersion 15063.
+          $umDir = "C:\Program Files (x86)\Windows Kits\10\UnionMetadata"
+          if (-not (Test-Path $umDir)) { Write-Host "::error::Windows Kits UnionMetadata dir missing"; exit 1 }
+          $ver = (Get-ChildItem $umDir -Directory | Where-Object Name -match '^10\.0\.\d+\.0$' | Sort-Object {[version]$_.Name} -Descending | Select-Object -First 1).Name
+          if (-not $ver) { Write-Host "::error::no UAP UnionMetadata found"; exit 1 }
+          Write-Host "Compile-time UAP=$ver ; appxmanifest Target stays 10.0.15254.0"
+          Add-Content -Path $env:GITHUB_ENV -Value "UAP_PINNED_VERSION=$ver"
 
-      - name: Build Release|ARM (ARM32, Lumia 950 / Elite x3)
-        run: msbuild Barometer_UWP\Barometer_UWP.csproj /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly
+      - name: Restore + Build Release|ARM (ARM32, Lumia 950 / Elite x3)
+        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Restore;Build /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }} /bl:build-arm.binlog
+
+      - name: Upload build diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics-arm
+          path: |
+            build-arm.binlog
+            Barometer_UWP/obj/**/*.nuget.g.props
+            Barometer_UWP/project.assets.json
 
       - name: Build Release|ARM64 (optional)
         if: ${{ inputs.build_arm64 }}
-        run: msbuild Barometer_UWP\Barometer_UWP.csproj /p:Configuration=Release /p:Platform=ARM64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly
+        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Restore;Build /p:Configuration=Release /p:Platform=ARM64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }}
 
       - name: Collect artifacts
         run: |
