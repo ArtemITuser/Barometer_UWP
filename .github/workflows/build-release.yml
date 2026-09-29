@@ -42,17 +42,15 @@ jobs:
             --includeRecommended --quiet --wait
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: NuGet restore (MSBuild-integrated; PackageReference requires this, not nuget.exe)
-        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Restore /p:Configuration=Release /p:Platform=ARM
+      - name: NuGet restore (packages.config style - wires UWP .NET Native toolchain correctly)
+        run: nuget restore Barometer_UWP.sln
 
-      - name: Verify WinRT projections restored (fail fast with diagnostics)
+      - name: Verify UWP metapackage restored (fail fast with diagnostics)
         shell: powershell
         run: |
-          $assets = "Barometer_UWP\project.assets.json"
-          if (-not (Test-Path $assets)) { Write-Host "::error::project.assets.json missing - restore failed"; exit 1 }
-          Select-String -Path $assets -Pattern "Microsoft.NETCore.UniversalWindowsPlatform" -Quiet
-          if (-not $?) { Write-Host "::error::UWP metapackage absent in assets file"; exit 1 }
-          Get-Content $assets -TotalCount 5
+          $meta = "packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8"
+          if (-not (Test-Path $meta)) { Write-Host "::error::UWP metapackage not restored to packages folder"; exit 1 }
+          Get-ChildItem $meta | Select-Object -First 5 Name
 
       - name: Build Release|ARM (ARM32, Lumia 950 / Elite x3)
         run: msbuild Barometer_UWP\Barometer_UWP.csproj /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly
