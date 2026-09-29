@@ -155,16 +155,21 @@
   </ItemGroup>
   <ItemGroup>
     <!-- Mobile-compatible package set (Win10 15063 ARM/ARM64): no OxyPlot.UWP,
-         no Microsoft.Graph 4.x / MSAL 4.x / Community Toolkit 7.x (unsupported). -->
-    <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform">
-      <Version>6.0.8</Version>
-    </PackageReference>
-    <PackageReference Include="Newtonsoft.Json">
-      <Version>12.0.3</Version>
-    </PackageReference>
-    <PackageReference Include="DocumentFormat.OpenXml">
-      <Version>2.9.1</Version>
-    </PackageReference>
+         no Microsoft.Graph 4.x / MSAL 4.x / Community Toolkit 7.x (unsupported).
+         packages.config style: required for classic UAP csproj on VS2017 and modern
+         MSBuild images (PackageReference in legacy project system does not wire the
+         UWP .NET Native toolchain -> WinRT projections missing at compile time). -->
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\packages\Newtonsoft.Json.12.0.3\lib\portable-net45+win8\Newtonsoft.Json.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="DocumentFormat.OpenXml">
+      <HintPath>..\packages\DocumentFormat.OpenXml.2.9.1\lib\netstandard1.3\DocumentFormat.OpenXml.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>
