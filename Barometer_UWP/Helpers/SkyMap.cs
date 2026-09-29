@@ -231,6 +231,8 @@ namespace Barometer_UWP.Helpers
             };
         }
 
+        #endregion
+
         #region Star catalog (ярчайшие звёзды, epoch J2000)
 
         public static readonly IReadOnlyList<Star> BrightStars = new List<Star>
