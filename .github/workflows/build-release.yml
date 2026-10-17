@@ -72,6 +72,7 @@ jobs:
           Select-String -Path $csproj -Pattern 'TargetPlatformMinVersion|Common\.props|AppxPackageSigningEnabled' | ForEach-Object { $_.Line.Trim() }
 
       - name: Restore + Build Release|ARM (ARM32, Lumia 950 / Elite x3)
+        shell: cmd
         run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Restore;Build /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }} /p:AppxPackageSigningEnabled=false /bl:build-arm.binlog
 
       - name: Upload build diagnostics on failure
@@ -86,6 +87,7 @@ jobs:
 
       - name: Build Release|ARM64 (optional)
         if: ${{ inputs.build_arm64 }}
+        shell: cmd
         run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Restore;Build /p:Configuration=Release /p:Platform=ARM64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }} /p:AppxPackageSigningEnabled=false
 
       - name: Collect artifacts
