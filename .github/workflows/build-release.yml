@@ -43,8 +43,8 @@ jobs:
         shell: powershell
         run: |
           # Classic UWP csproj resolves WinRT projections + netcore reference assemblies via
-          # $(TargetPlatformVersion)=10.0.15254.0. Runner images ship newer Kits only, so the
-          # 15254 facades are absent -> every System.* / Windows.* type fails (CS0012/CS0234/CS0246).
+          # $(TargetPlatformVersion). Runner images ship newer Kits only, so the 15254 facades
+          # are absent -> every System.* / Windows.* type fails (CS0012/CS0234/CS0246).
           # We keep the manifest at 15254 (runtime contract) but compile against the newest
           # installed UAP surface, which is backward compatible down to MinVersion 15063.
           $umDir = "C:\Program Files (x86)\Windows Kits\10\UnionMetadata"
@@ -54,8 +54,32 @@ jobs:
           Write-Host "Compile-time UAP=$ver ; appxmanifest Target stays 10.0.15254.0"
           Add-Content -Path $env:GITHUB_ENV -Value "UAP_PINNED_VERSION=$ver"
 
+      - name: Patch project for CI (override TargetPlatformMinVersion, MSBuild imports, signing)
+        shell: powershell
+        run: |
+          $csproj = "Barometer_UWP\Barometer_UWP.csproj"
+          $xml = [xml](Get-Content $csproj)
+          $ns = New-Object System.Xml.XmlNamespaceManager($xml.Name)
+          $ns.AddNamespace("ms", "http://schemas.microsoft.com/developer/msbuild/2003")
+          # 1) Override MinVersion with the pinned SDK too: nuget picks uap10.0.<min> target
+          #    folder from it; packages.config has no assets for 15063 on this toolchain.
+          $node = $xml.SelectSingleNode("//ms:PropertyGroup/ms:TargetPlatformMinVersion", $ns)
+          $node.InnerText = "${{ env.UAP_PINNED_VERSION }}"
+          # 2) Fix Microsoft.Common.props import: hard-coded $(MSBuildToolsVersion) path does not
+          #    exist under VS2022 layout -> UWP .winmd references silently drop (mass CS0234).
+          $imp = $xml.SelectSingleNode("//ms:Import[@Project*='Microsoft.Common.props']", $ns)
+          if ($imp) { $imp.Project = "`$(MSBuildExtensionsPath)\Microsoft\Common\Microsoft.Common.props" }
+          # 3) Disable package signing in CI (no private pfx key on runner).
+          $pg = $xml.SelectSingleNode("//ms:PropertyGroup", $ns)
+          $el = $xml.CreateElement("PropertyGroup", $xml.DocumentElement.NamespaceURI)
+          $c1 = $xml.CreateElement("AppxPackageSigningEnabled", $xml.DocumentElement.NamespaceURI); $c1.InnerText = "False"
+          $c2 = $xml.CreateElement("PackageCertificateKeyFile", $xml.DocumentElement.NamespaceURI); $c2.InnerText = ""
+          $el.AppendChild($c1); $el.AppendChild($c2); $xml.DocumentElement.AppendChild($el)
+          $xml.Save($csproj)
+          Get-Content $csproj | Select-Object -First 25
+
       - name: Restore + Build Release|ARM (ARM32, Lumia 950 / Elite x3)
-        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Restore;Build /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }} /bl:build-arm.binlog
+        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Restore;Build /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }} /p:AppxPackageSigningEnabled=false /bl:build-arm.binlog
 
       - name: Upload build diagnostics on failure
         if: failure()
@@ -69,7 +93,7 @@ jobs:
 
       - name: Build Release|ARM64 (optional)
         if: ${{ inputs.build_arm64 }}
-        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Restore;Build /p:Configuration=Release /p:Platform=ARM64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }}
+        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Restore;Build /p:Configuration=Release /p:Platform=ARM64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }} /p:AppxPackageSigningEnabled=false
 
       - name: Collect artifacts
         run: |
