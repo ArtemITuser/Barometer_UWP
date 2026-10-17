@@ -55,28 +55,21 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "UAP_PINNED_VERSION=$ver"
 
       - name: Patch project for CI (override TargetPlatformMinVersion, MSBuild imports, signing)
-        shell: powershell
+        shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           $csproj = "Barometer_UWP\Barometer_UWP.csproj"
-          $xml = [xml](Get-Content $csproj)
-          $ns = New-Object System.Xml.XmlNamespaceManager($xml.Name)
-          $ns.AddNamespace("ms", "http://schemas.microsoft.com/developer/msbuild/2003")
+          $raw = Get-Content $csproj -Raw
           # 1) Override MinVersion with the pinned SDK too: nuget picks uap10.0.<min> target
           #    folder from it; packages.config has no assets for 15063 on this toolchain.
-          $node = $xml.SelectSingleNode("//ms:PropertyGroup/ms:TargetPlatformMinVersion", $ns)
-          $node.InnerText = "${{ env.UAP_PINNED_VERSION }}"
+          $raw = $raw -replace '<TargetPlatformMinVersion>[^<]*</TargetPlatformMinVersion>', "<TargetPlatformMinVersion>${{ env.UAP_PINNED_VERSION }}</TargetPlatformMinVersion>"
           # 2) Fix Microsoft.Common.props import: hard-coded $(MSBuildToolsVersion) path does not
           #    exist under VS2022 layout -> UWP .winmd references silently drop (mass CS0234).
-          $imp = $xml.SelectSingleNode("//ms:Import[@Project*='Microsoft.Common.props']", $ns)
-          if ($imp) { $imp.Project = "`$(MSBuildExtensionsPath)\Microsoft\Common\Microsoft.Common.props" }
+          $raw = $raw.Replace('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props', '$(MSBuildExtensionsPath)\Microsoft\Common\Microsoft.Common.props')
           # 3) Disable package signing in CI (no private pfx key on runner).
-          $pg = $xml.SelectSingleNode("//ms:PropertyGroup", $ns)
-          $el = $xml.CreateElement("PropertyGroup", $xml.DocumentElement.NamespaceURI)
-          $c1 = $xml.CreateElement("AppxPackageSigningEnabled", $xml.DocumentElement.NamespaceURI); $c1.InnerText = "False"
-          $c2 = $xml.CreateElement("PackageCertificateKeyFile", $xml.DocumentElement.NamespaceURI); $c2.InnerText = ""
-          $el.AppendChild($c1); $el.AppendChild($c2); $xml.DocumentElement.AppendChild($el)
-          $xml.Save($csproj)
-          Get-Content $csproj | Select-Object -First 25
+          $raw = $raw -replace '</Project>\s*$', "  <PropertyGroup>`n    <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>`n  </PropertyGroup>`n</Project>`n"
+          Set-Content $csproj $raw -Encoding UTF8
+          Select-String -Path $csproj -Pattern 'TargetPlatformMinVersion|Common\.props|AppxPackageSigningEnabled' | ForEach-Object { $_.Line.Trim() }
 
       - name: Restore + Build Release|ARM (ARM32, Lumia 950 / Elite x3)
         run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Restore;Build /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }} /p:AppxPackageSigningEnabled=false /bl:build-arm.binlog
