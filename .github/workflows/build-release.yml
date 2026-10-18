@@ -91,6 +91,52 @@ jobs:
           }
           Get-ChildItem packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8 -Recurse -Filter *.winmd | Select-Object -First 3 FullName
 
+      - name: Generate obj\nuget.g.props/targets (packages.config wiring for MSBuild)
+        shell: powershell
+        run: |
+          # Classic packages.config projects rely on VS writing obj\<proj>.nuget.g.props into the
+          # csproj's obj folder; nuget.exe CLI restore does NOT do this for a bare packages.config
+          # invocation. Without those imports the restored UWP metapackage (System.Runtime facades,
+          # WinRT projections) is invisible to XamlCompiler/CSC -> WMC1006 + CS2001 cascade.
+          # Emulate them manually against the restored packages folder.
+          $ErrorActionPreference = "Stop"
+          $projDir = "Barometer_UWP"
+          $objDir  = Join-Path $projDir "obj"
+          New-Item -ItemType Directory -Force -Path $objDir | Out-Null
+          $pkgRoot = Join-Path (Get-Location).Path "packages"
+          $solRoot = (Get-Location).Path
+          # Build the props file line-by-line to avoid here-string/YAML indentation pitfalls.
+          $lines = @(
+            '<?xml version="1.0" encoding="utf-8"?>',
+            '<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">',
+            '  <PropertyGroup>',
+            "    <SolutionDir>$([System.IO.Path]::GetFullPath($solRoot))\</SolutionDir>",
+            '    <NuGetProjectStyle>packages.config</NuGetProjectStyle>',
+            '    <PackagesConfig>true</PackagesConfig>',
+            "    <PackagesDir>$pkgRoot\</PackagesDir>",
+            '  </PropertyGroup>',
+            '  <ItemGroup>',
+            '    <Reference Include="System.Runtime">',
+            "      <HintPath>$pkgRoot\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8\lib\uap10.0\System.Runtime.dll</HintPath>",
+            '    </Reference>',
+            '  </ItemGroup>',
+            '</Project>'
+          )
+          Set-Content (Join-Path $objDir "Barometer_UWP.nuget.g.props") $lines -Encoding UTF8
+          Set-Content (Join-Path $objDir "Barometer_UWP.nuget.g.targets") @(
+            '<?xml version="1.0" encoding="utf-8"?>',
+            '<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">',
+            '</Project>'
+          ) -Encoding UTF8
+          Get-Content (Join-Path $objDir "Barometer_UWP.nuget.g.props")
+          # Verify the UWP lib folders actually contain the facade set before building.
+          $uwpLib = "$pkgRoot\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8\lib"
+          Get-ChildItem $uwpLib -Directory | ForEach-Object { $_.Name }
+          if (-not (Test-Path "$uwpLib\uap10.0\System.Runtime.dll")) {
+            Write-Host "::warning::uap10.0\System.Runtime.dll not found; listing actual layout:"
+            Get-ChildItem $uwpLib -Recurse -Filter System.Runtime.dll | Select-Object -First 5 FullName
+          }
+
       - name: Build Release|ARM (ARM32, Lumia 950 / Elite x3)
         shell: cmd
         run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Build /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }} /p:AppxPackageSigningEnabled=false /bl:build-arm.binlog

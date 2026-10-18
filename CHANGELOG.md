@@ -48,3 +48,10 @@
   Root cause of WMC1006 "System.Runtime cannot be resolved": restored UWP metapackage
   was never referenced at compile time because the project lacked the NuGet.targets imports.
 - Bump manifest/assembly version to 1.4.0.6; retagging triggers a fresh Actions run.
+
+## v1.4.0.7 (2026-10-19)
+- CI: HintPaths pinned to $(MSBuildThisFileDirectory)..\packages (runner-global Newtonsoft.Json
+  under Program Files shadowed relative paths -> wrong CLR flavor -> WMC1006 System.Runtime).
+- CI: new workflow step generates obj\Barometer_UWP.nuget.g.props with explicit System.Runtime
+  facade reference from the restored UWP metapackage (nuget.exe CLI does not emit these files;
+  csproj now imports them conditionally).

@@ -158,13 +158,17 @@
          no Microsoft.Graph 4.x / MSAL 4.x / Community Toolkit 7.x (unsupported).
          packages.config style: required for classic UAP csproj on VS2017 and modern
          MSBuild images (PackageReference in legacy project system does not wire the
-         UWP .NET Native toolchain -> WinRT projections missing at compile time). -->
+         UWP .NET Native toolchain -> WinRT projections missing at compile time).
+         NOTE: HintPaths must be absolute-safe: CI runners have a global Newtonsoft.Json
+         under Program Files that MSBuild's simple-name resolution can shadow relative
+         ..\packages paths with (wrong CLR flavor -> WMC1006 System.Runtime unresolved).
+         $(MSBuildThisFileDirectory) pins them to the restored packages folder. -->
     <Reference Include="Newtonsoft.Json">
-      <HintPath>..\packages\Newtonsoft.Json.12.0.3\lib\portable-net45+win8\Newtonsoft.Json.dll</HintPath>
+      <HintPath>$(MSBuildThisFileDirectory)..\packages\Newtonsoft.Json.12.0.3\lib\portable-net45+win8\Newtonsoft.Json.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="DocumentFormat.OpenXml">
-      <HintPath>..\packages\DocumentFormat.OpenXml.2.9.1\lib\netstandard1.3\DocumentFormat.OpenXml.dll</HintPath>
+      <HintPath>$(MSBuildThisFileDirectory)..\packages\DocumentFormat.OpenXml.2.9.1\lib\netstandard1.3\DocumentFormat.OpenXml.dll</HintPath>
       <Private>True</Private>
     </Reference>
   </ItemGroup>
