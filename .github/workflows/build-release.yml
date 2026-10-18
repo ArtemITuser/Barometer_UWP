@@ -94,16 +94,17 @@ jobs:
       - name: Flatten UWP metapackage dependencies (nuget.exe CLI does not install transitive deps)
         shell: powershell
         run: |
-          # Critical: nuget.exe restore of a bare packages.config resolves ONLY the three listed
-          # packages. Microsoft.NETCore.UniversalWindowsPlatform is a metapackage whose real content
-          # lives in ~200 transitive dependency packages (System.Runtime facade, WinRT projections,
-          # .NET Native toolchain). They are never downloaded -> WMC1006 'System.Runtime cannot be
-          # resolved' regardless of csproj wiring. Restore via the sln instead: MSBuild-based restore
-          # follows project -> packages.config -> metapackage -> full dependency closure.
+          # v1.4.0.9: packages.config now contains the FULL flattened dependency closure of the
+          # UWP metapackage (89 packages incl. System.Runtime facades, WinRT projections, .NET
+          # Native toolchain), so nuget.exe CLI restore downloads everything directly. No need
+          # for MSBuild-based sln restore (which silently skipped transitive resolution here).
           ./nuget.exe restore Barometer_UWP.sln -NonInteractive
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $fr = "packages\System.Runtime.4.3.0"
-          if (-not (Test-Path $fr)) { Write-Host "::error::transitive closure missing ($fr)"; exit 1 }
+          ./nuget.exe restore Barometer_UWP\packages.config -SolutionDirectory . -NonInteractive
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($req in @("packages\System.Runtime.4.3.0","packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8")) {
+            if (-not (Test-Path $req)) { Write-Host "::error::closure missing ($req)"; exit 1 }
+          }
           Write-Host ("package count after full restore: " + (Get-ChildItem packages -Directory).Count)
 
       - name: Generate obj\nuget.g.props/targets (packages.config wiring for MSBuild)
