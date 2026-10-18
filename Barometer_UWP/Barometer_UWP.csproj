@@ -175,4 +175,11 @@
     <VisualStudioVersion>14.0</VisualStudioVersion>
   </PropertyGroup>
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
+  <!-- packages.config NuGet wiring: without these imports the restored metapackage
+       Microsoft.NETCore.UniversalWindowsPlatform (WinRT projections + System.Runtime facade)
+       is never referenced at compile time -> WMC1006 'System.Runtime cannot be resolved'.
+       Condition guards keep VS2017 local builds working when obj\nuget.g.props was generated
+       by a prior nuget.exe restore. -->
+  <Import Project="$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.props" Condition="Exists('$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.props')" />
+  <Import Project="$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.targets" Condition="Exists('$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.targets')" />
 </Project>

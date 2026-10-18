@@ -42,3 +42,9 @@
 
 ### Известные ограничения среды
 - Полная сборка MSBuild/UAP невозможна в данном Linux-контейнере (нет Windows SDK). Выполнены: статическая кросс-валидация слоёв, XML-валидация манифеста/csproj/XAML/resw, проверка состава проекта и версий пакетов. Финальная проверка: VS2017/2019 + UAP 15254, Restore NuGet, Build Release|ARM (затем Release|AnyCPU/AppX для ARM64-устройств HP Elite x3 через Device Portal).
+
+## v1.4.0.6 (2026-10-19)
+- CI fix: csproj now imports obj\*.nuget.g.props/targets (packages.config NuGet wiring).
+  Root cause of WMC1006 "System.Runtime cannot be resolved": restored UWP metapackage
+  was never referenced at compile time because the project lacked the NuGet.targets imports.
+- Bump manifest/assembly version to 1.4.0.6; retagging triggers a fresh Actions run.
