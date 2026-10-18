@@ -83,10 +83,32 @@ jobs:
           }
           ./nuget.exe restore Barometer_UWP\packages.config -SolutionDirectory . -NonInteractive
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # v1.4.0.10: nuget.exe resolves packages.config against the csproj's
+          # TargetFramework moniker; with newer UAP targets installed it reports
+          # "no packages to install" and silently skips everything -> hard-fail here
+          # instead of a confusing WMC0003 cascade at compile time. Fallback: explicit
+          # per-package download+extract into ..\packages (closure is fully flattened).
+          function Ensure-Pkg($id, $ver) {
+            $dir = "packages\$id.$ver"
+            if (Test-Path $dir) { return }
+            Write-Host "Manual fetch: $id $ver"
+            $nupkg = "$dir.zip"; New-Item -ItemType Directory -Force -Path $dir | Out-Null
+            Invoke-WebRequest "https://api.nuget.org/v3-flatcontainer/$($id.ToLowerInvariant())/$ver/$($id.ToLowerInvariant()).$ver.nupkg" -OutFile $nupkg
+            Expand-Archive $nupkg -DestinationPath $dir -Force; Remove-Item $nupkg
+          }
+          Ensure-Pkg "Microsoft.NETCore.UniversalWindowsPlatform" "6.0.8"
+          Ensure-Pkg "Newtonsoft.Json" "12.0.3"
+          Ensure-Pkg "DocumentFormat.OpenXml" "2.9.1"
+          Ensure-Pkg "System.Runtime" "4.1.0"
+          Ensure-Pkg "System.ObjectModel" "4.0.12"
+          Ensure-Pkg "System.Runtime.WindowsRuntime.UI.Xaml" "4.0.1"
           foreach ($p in @(
             "packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8",
             "packages\Newtonsoft.Json.12.0.3",
-            "packages\DocumentFormat.OpenXml.2.9.1")) {
+            "packages\DocumentFormat.OpenXml.2.9.1",
+            "packages\System.Runtime.4.1.0",
+            "packages\System.ObjectModel.4.0.12",
+            "packages\System.Runtime.WindowsRuntime.UI.Xaml.4.0.1")) {
             if (-not (Test-Path $p)) { Write-Host "::error::restore missing $p"; exit 1 }
           }
           Get-ChildItem packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8 -Recurse -Filter *.winmd | Select-Object -First 3 FullName
