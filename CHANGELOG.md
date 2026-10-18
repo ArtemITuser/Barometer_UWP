@@ -55,3 +55,9 @@
 - CI: new workflow step generates obj\Barometer_UWP.nuget.g.props with explicit System.Runtime
   facade reference from the restored UWP metapackage (nuget.exe CLI does not emit these files;
   csproj now imports them conditionally).
+
+## v1.4.0.8 (2026-10-19)
+- CI root cause found: nuget.exe CLI restore of bare packages.config does NOT install the
+  transitive dependency closure of the UWP metapackage (System.Runtime facade etc. absent).
+  Added `nuget restore Barometer_UWP.sln` step + pre-flatten verification.
+- nuget.g.props generation now resolves System.Runtime.dll dynamically from the packages tree.

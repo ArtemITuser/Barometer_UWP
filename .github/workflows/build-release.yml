@@ -91,6 +91,21 @@ jobs:
           }
           Get-ChildItem packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8 -Recurse -Filter *.winmd | Select-Object -First 3 FullName
 
+      - name: Flatten UWP metapackage dependencies (nuget.exe CLI does not install transitive deps)
+        shell: powershell
+        run: |
+          # Critical: nuget.exe restore of a bare packages.config resolves ONLY the three listed
+          # packages. Microsoft.NETCore.UniversalWindowsPlatform is a metapackage whose real content
+          # lives in ~200 transitive dependency packages (System.Runtime facade, WinRT projections,
+          # .NET Native toolchain). They are never downloaded -> WMC1006 'System.Runtime cannot be
+          # resolved' regardless of csproj wiring. Restore via the sln instead: MSBuild-based restore
+          # follows project -> packages.config -> metapackage -> full dependency closure.
+          ./nuget.exe restore Barometer_UWP.sln -NonInteractive
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $fr = "packages\System.Runtime.4.3.0"
+          if (-not (Test-Path $fr)) { Write-Host "::error::transitive closure missing ($fr)"; exit 1 }
+          Write-Host ("package count after full restore: " + (Get-ChildItem packages -Directory).Count)
+
       - name: Generate obj\nuget.g.props/targets (packages.config wiring for MSBuild)
         shell: powershell
         run: |
@@ -105,6 +120,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path $objDir | Out-Null
           $pkgRoot = Join-Path (Get-Location).Path "packages"
           $solRoot = (Get-Location).Path
+          # metapackage layout: lib\uap10.0 lives in the *transitive* Microsoft.NETCore.UWPLibraryPack,
+          # not in the metapackage folder itself. Resolve System.Runtime.dll wherever it actually is.
+          $rt = Get-ChildItem $pkgRoot -Recurse -Filter System.Runtime.dll |
+                Where-Object { $_.FullName -match 'Microsoft\.NETCore\.UniversalWindowsPlatform' } |
+                Select-Object -First 1
+          if (-not $rt) { $rt = Get-ChildItem $pkgRoot -Recurse -Filter System.Runtime.dll | Select-Object -First 1 }
+          if (-not $rt) { Write-Host "::error::System.Runtime.dll not found anywhere under packages\"; exit 1 }
+          Write-Host "Using facade: $($rt.FullName)"
           # Build the props file line-by-line to avoid here-string/YAML indentation pitfalls.
           $lines = @(
             '<?xml version="1.0" encoding="utf-8"?>',
@@ -117,7 +140,7 @@ jobs:
             '  </PropertyGroup>',
             '  <ItemGroup>',
             '    <Reference Include="System.Runtime">',
-            "      <HintPath>$pkgRoot\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8\lib\uap10.0\System.Runtime.dll</HintPath>",
+            "      <HintPath>$($rt.FullName)</HintPath>",
             '    </Reference>',
             '  </ItemGroup>',
             '</Project>'
@@ -129,13 +152,6 @@ jobs:
             '</Project>'
           ) -Encoding UTF8
           Get-Content (Join-Path $objDir "Barometer_UWP.nuget.g.props")
-          # Verify the UWP lib folders actually contain the facade set before building.
-          $uwpLib = "$pkgRoot\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8\lib"
-          Get-ChildItem $uwpLib -Directory | ForEach-Object { $_.Name }
-          if (-not (Test-Path "$uwpLib\uap10.0\System.Runtime.dll")) {
-            Write-Host "::warning::uap10.0\System.Runtime.dll not found; listing actual layout:"
-            Get-ChildItem $uwpLib -Recurse -Filter System.Runtime.dll | Select-Object -First 5 FullName
-          }
 
       - name: Build Release|ARM (ARM32, Lumia 950 / Elite x3)
         shell: cmd
