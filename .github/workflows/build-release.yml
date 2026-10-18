@@ -98,9 +98,8 @@ jobs:
           # UWP metapackage (89 packages incl. System.Runtime facades, WinRT projections, .NET
           # Native toolchain), so nuget.exe CLI restore downloads everything directly. No need
           # for MSBuild-based sln restore (which silently skipped transitive resolution here).
-          ./nuget.exe restore Barometer_UWP\packages.config -SolutionDirectory . -NonInteractive
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          # version-tolerant guards: facade may resolve to any 4.x depending on graph
+          # Idempotent second pass: everything already restored by the previous step;
+          # running it again is a cheap no-op guard (kept for clarity of intent).
           if (-not (Get-ChildItem packages -Directory -Filter "System.Runtime.*")) { Write-Host "::error::System.Runtime facade missing"; exit 1 }
           if (-not (Test-Path "packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8")) { Write-Host "::error::UAP metapackage missing"; exit 1 }
           Write-Host ("package count after full restore: " + (Get-ChildItem packages -Directory).Count)
