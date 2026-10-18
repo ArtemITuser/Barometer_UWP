@@ -71,9 +71,29 @@ jobs:
           Set-Content $csproj $raw -Encoding UTF8
           Select-String -Path $csproj -Pattern 'TargetPlatformMinVersion|Common\.props|AppxPackageSigningEnabled' | ForEach-Object { $_.Line.Trim() }
 
-      - name: Restore + Build Release|ARM (ARM32, Lumia 950 / Elite x3)
+      - name: NuGet restore packages.config (classic UWP toolchain)
+        shell: powershell
+        run: |
+          # Root cause of WMC1006 'System.Runtime cannot be resolved': MSBuild /t:Restore
+          # does NOT restore packages.config projects ("Nothing to do. None of the projects
+          # specified contain packages to restore") -> metapackage Microsoft.NETCore.UniversalWindowsPlatform
+          # never lands in ..\packages and the netcore/WinRT projections are missing at compile time.
+          if (-not (Test-Path nuget.exe)) {
+            Invoke-WebRequest https://dist.nuget.org/win-x86-commandline/v6.4.0/nuget.exe -OutFile nuget.exe
+          }
+          ./nuget.exe restore Barometer_UWP\packages.config -SolutionDirectory . -NonInteractive
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($p in @(
+            "packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8",
+            "packages\Newtonsoft.Json.12.0.3",
+            "packages\DocumentFormat.OpenXml.2.9.1")) {
+            if (-not (Test-Path $p)) { Write-Host "::error::restore missing $p"; exit 1 }
+          }
+          Get-ChildItem packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8 -Recurse -Filter *.winmd | Select-Object -First 3 FullName
+
+      - name: Build Release|ARM (ARM32, Lumia 950 / Elite x3)
         shell: cmd
-        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Restore;Build /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }} /p:AppxPackageSigningEnabled=false /bl:build-arm.binlog
+        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Build /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }} /p:AppxPackageSigningEnabled=false /bl:build-arm.binlog
 
       - name: Upload build diagnostics on failure
         if: failure()
@@ -88,7 +108,7 @@ jobs:
       - name: Build Release|ARM64 (optional)
         if: ${{ inputs.build_arm64 }}
         shell: cmd
-        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Restore;Build /p:Configuration=Release /p:Platform=ARM64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }} /p:AppxPackageSigningEnabled=false
+        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Build /p:Configuration=Release /p:Platform=ARM64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }} /p:AppxPackageSigningEnabled=false
 
       - name: Collect artifacts
         run: |
