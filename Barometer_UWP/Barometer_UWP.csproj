@@ -171,6 +171,19 @@
       <HintPath>$(MSBuildThisFileDirectory)..\packages\DocumentFormat.OpenXml.2.9.1\lib\netstandard1.3\DocumentFormat.OpenXml.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <!-- XamlCompiler (WMC) type universe does NOT follow NuGet transitive refs of the
+         UAP metapackage: without explicit References below, every {Binding ...} in XAML
+         fails with WMC0003 "cannot resolve System.Runtime.WindowsRuntime.UI.Xaml /
+         System.ObjectModel". These are the WinRT INotifyPropertyChanged projection and
+         ObservableCollection facades used by all binding-enabled pages. -->
+    <Reference Include="System.Runtime.WindowsRuntime.UI.Xaml">
+      <HintPath>$(MSBuildThisFileDirectory)..\packages\System.Runtime.WindowsRuntime.UI.Xaml.4.0.1\lib\uap10.0_10254\System.Runtime.WindowsRuntime.UI.Xaml.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.ObjectModel">
+      <HintPath>$(MSBuildThisFileDirectory)..\packages\System.ObjectModel.4.0.12\lib\netstandard1.3\System.ObjectModel.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
