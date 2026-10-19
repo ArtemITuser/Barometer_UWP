@@ -78,38 +78,41 @@ jobs:
           # does NOT restore packages.config projects ("Nothing to do. None of the projects
           # specified contain packages to restore") -> metapackage Microsoft.NETCore.UniversalWindowsPlatform
           # never lands in ..\packages and the netcore/WinRT projections are missing at compile time.
-          if (-not (Test-Path nuget.exe)) {
-            Invoke-WebRequest https://dist.nuget.org/win-x86-commandline/v6.4.0/nuget.exe -OutFile nuget.exe
+          # v1.4.0.11: NU5000 root cause — case-differing duplicate ids in packages.config
+          # (system.runtime vs System.Runtime etc.) are rejected by nuget.exe regardless of
+          # version pinning. Deterministic full-closure manual fetch replaces nuget.exe CLI
+          # entirely: parse deduped packages.config, download+extract each nupkg into
+          # packages\<Id>.<Version>. Closure is fully flattened in packages.config (v1.4.0.9+).
+          [xml]$pc = Get-Content "Barometer_UWP\packages.config"
+          $seen = @{}
+          foreach ($n in $pc.packages.package) {
+            $k = $n.id.ToLowerInvariant()
+            if (-not $seen.ContainsKey($k)) { $seen[$k] = @{ Id = $n.id; Ver = $n.version } }
           }
-          ./nuget.exe restore Barometer_UWP\packages.config -SolutionDirectory . -NonInteractive
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          # v1.4.0.10: nuget.exe resolves packages.config against the csproj's
-          # TargetFramework moniker; with newer UAP targets installed it reports
-          # "no packages to install" and silently skips everything -> hard-fail here
-          # instead of a confusing WMC0003 cascade at compile time. Fallback: explicit
-          # per-package download+extract into ..\packages (closure is fully flattened).
-          function Ensure-Pkg($id, $ver) {
-            $dir = "packages\$id.$ver"
-            if (Test-Path $dir) { return }
-            Write-Host "Manual fetch: $id $ver"
-            $nupkg = "$dir.zip"; New-Item -ItemType Directory -Force -Path $dir | Out-Null
-            Invoke-WebRequest "https://api.nuget.org/v3-flatcontainer/$($id.ToLowerInvariant())/$ver/$($id.ToLowerInvariant()).$ver.nupkg" -OutFile $nupkg
-            Expand-Archive $nupkg -DestinationPath $dir -Force; Remove-Item $nupkg
+          Write-Host ("packages to fetch: " + $seen.Count)
+          foreach ($e in $seen.Values) {
+            $dir = "packages\$($e.Id).$($e.Ver)"
+            if (Test-Path $dir) { continue }
+            $lid = $e.Id.ToLowerInvariant()
+            $nupkg = Join-Path $env:TEMP "$lid.$($e.Ver).nupkg"
+            $url = "https://api.nuget.org/v3-flatcontainer/$lid/$($e.Ver)/$lid.$($e.Ver).nupkg"
+            try {
+              Invoke-WebRequest $url -OutFile $nupkg -UseBasicParsing
+              New-Item -ItemType Directory -Force -Path $dir | Out-Null
+              Expand-Archive $nupkg -DestinationPath $dir -Force
+              Remove-Item $nupkg -ErrorAction SilentlyContinue
+            } catch {
+              Write-Host "::error::fetch failed $($e.Id) $($e.Ver): $_"; exit 1
+            }
           }
-          Ensure-Pkg "Microsoft.NETCore.UniversalWindowsPlatform" "6.0.8"
-          Ensure-Pkg "Newtonsoft.Json" "12.0.3"
-          Ensure-Pkg "DocumentFormat.OpenXml" "2.9.1"
-          Ensure-Pkg "System.Runtime" "4.1.0"
-          Ensure-Pkg "System.ObjectModel" "4.0.12"
-          Ensure-Pkg "System.Runtime.WindowsRuntime.UI.Xaml" "4.0.1"
-          foreach ($p in @(
+          foreach ($req in @(
             "packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8",
             "packages\Newtonsoft.Json.12.0.3",
             "packages\DocumentFormat.OpenXml.2.9.1",
-            "packages\System.Runtime.4.1.0",
-            "packages\System.ObjectModel.4.0.12",
+            "packages\system.runtime.4.1.0",
+            "packages\system.objectmodel.4.0.12",
             "packages\System.Runtime.WindowsRuntime.UI.Xaml.4.0.1")) {
-            if (-not (Test-Path $p)) { Write-Host "::error::restore missing $p"; exit 1 }
+            if (-not (Test-Path $req)) { Write-Host "::error::restore missing $req"; exit 1 }
           }
           Get-ChildItem packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8 -Recurse -Filter *.winmd | Select-Object -First 3 FullName
 
