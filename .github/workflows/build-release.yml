@@ -134,6 +134,16 @@ jobs:
           }
           Write-Host ("mirror count: " + (Get-ChildItem packages -Directory | Where-Object { $_.Name -cne $_.Name.ToLowerInvariant() }).Count)
           Get-ChildItem packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8 -Recurse -Filter *.winmd | Select-Object -First 3 FullName
+          # v1.4.0.12c: verify every HintPath referenced from the csproj actually exists,
+          # and fail fast with a clear message instead of CS0012/CS0234 at compile time.
+          [xml]$csproj = Get-Content "Barometer_UWP\Barometer_UWP.csproj"
+          $badRef = $false
+          foreach ($r in $csproj.Project.ItemGroup.Reference | Where-Object { $_.HintPath }) {
+            $p = $r.HintPath.Replace('$(MSBuildThisFileDirectory)', 'Barometer_UWP\').Replace('\', '/')
+            if (-not (Test-Path $p)) { Write-Host "::error::HintPath missing on disk: $($r.HintPath)"; $badRef = $true }
+            else { Write-Host "OK ref: $($r.HintPath)" }
+          }
+          if ($badRef) { exit 1 }
 
       - name: Flatten UWP metapackage dependencies (nuget.exe CLI does not install transitive deps)
         shell: powershell

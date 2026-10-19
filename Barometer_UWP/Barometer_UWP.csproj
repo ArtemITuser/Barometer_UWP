@@ -186,7 +186,11 @@
       <Private>False</Private>
     </Reference>
     <Reference Include="System.ObjectModel">
-      <HintPath>$(MSBuildThisFileDirectory)..\packages\System.ObjectModel.4.0.12\lib\netstandard1.3\System.ObjectModel.dll</HintPath>
+      <!-- v1.4.0.12c: use the netcore50 facade (type-forwarded to mscorlib), NOT the
+           netstandard1.3 implementation assembly. Referencing the ns1.3 dll injects a
+           duplicate System.Object into the compile universe -> CS0012 "add a reference to
+           mscorlib" + CS0234 System.Linq/System.Collections missing across all files. -->
+      <HintPath>$(MSBuildThisFileDirectory)..\packages\System.ObjectModel.4.0.12\ref\netcore50\System.ObjectModel.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
