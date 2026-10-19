@@ -28,7 +28,12 @@
             <StackPanel Margin="20,10,20,20">
 
             <!-- Theme Settings -->
-            <Expander Header="Theme Settings" Margin="0,0,0,20">
+            <StackPanel Margin="0,0,0,20">
+                <ToggleButton x:Name="S1Tgl" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                              FontSize="16" FontWeight="SemiBold" Padding="12,8">
+                    <TextBlock Text="Theme Settings"/>
+                </ToggleButton>
+                <ContentControl Visibility="{Binding IsChecked, ElementName=S1Tgl}">
                 <StackPanel Padding="10">
                     <TextBlock Text="Select Theme:" Margin="0,0,0,10"/>
                     <ComboBox x:Name="ThemeComboBox" 
@@ -42,10 +47,16 @@
                               Content="Auto Theme (Based on Sunrise/Sunset)" 
                               Margin="0,0,0,10"/>
                 </StackPanel>
-            </Expander>
+                </ContentControl>
+            </StackPanel>
 
             <!-- Localization Settings -->
-            <Expander Header="Localization" Margin="0,0,0,20">
+            <StackPanel Margin="0,0,0,20">
+                <ToggleButton x:Name="S2Tgl" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                              FontSize="16" FontWeight="SemiBold" Padding="12,8">
+                    <TextBlock Text="Localization"/>
+                </ToggleButton>
+                <ContentControl Visibility="{Binding IsChecked, ElementName=S2Tgl}">
                 <StackPanel Padding="10">
                     <TextBlock Text="Select Language:" Margin="0,0,0,10"/>
                     <ComboBox x:Name="LanguageComboBox" 
@@ -54,10 +65,16 @@
                               HorizontalAlignment="Stretch" 
                               Margin="0,0,0,10"/>
                 </StackPanel>
-            </Expander>
+                </ContentControl>
+            </StackPanel>
 
             <!-- Export/Import Settings -->
-            <Expander Header="Export/Import Data" Margin="0,0,0,20">
+            <StackPanel Margin="0,0,0,20">
+                <ToggleButton x:Name="S3Tgl" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                              FontSize="16" FontWeight="SemiBold" Padding="12,8">
+                    <TextBlock Text="Export/Import Data"/>
+                </ToggleButton>
+                <ContentControl Visibility="{Binding IsChecked, ElementName=S3Tgl}">
                 <StackPanel Padding="10">
                     <TextBlock Text="Export Data:" Margin="0,0,0,10"/>
                     <StackPanel Orientation="Horizontal" Spacing="10">
@@ -82,10 +99,16 @@
                                 Margin="0,0,10,0"/>
                     </StackPanel>
                 </StackPanel>
-            </Expander>
+                </ContentControl>
+            </StackPanel>
 
             <!-- Data Collection Settings -->
-            <Expander Header="Data Collection" Margin="0,0,0,20">
+            <StackPanel Margin="0,0,0,20">
+                <ToggleButton x:Name="S4Tgl" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                              FontSize="16" FontWeight="SemiBold" Padding="12,8">
+                    <TextBlock Text="Data Collection"/>
+                </ToggleButton>
+                <ContentControl Visibility="{Binding IsChecked, ElementName=S4Tgl}">
                 <StackPanel Padding="10">
                     <TextBlock Text="Collection Frequency (seconds):" Margin="0,0,0,10"/>
                     <Slider x:Name="FrequencySlider" 
@@ -103,10 +126,16 @@
                               Content="Reduce Collection at Night" 
                               Margin="0,0,0,10"/>
                 </StackPanel>
-            </Expander>
+                </ContentControl>
+            </StackPanel>
 
             <!-- Schedule Settings -->
-            <Expander Header="Collection Schedule" Margin="0,0,0,20">
+            <StackPanel Margin="0,0,0,20">
+                <ToggleButton x:Name="S5Tgl" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                              FontSize="16" FontWeight="SemiBold" Padding="12,8">
+                    <TextBlock Text="Collection Schedule"/>
+                </ToggleButton>
+                <ContentControl Visibility="{Binding IsChecked, ElementName=S5Tgl}">
                 <StackPanel Padding="10">
                     <ListView ItemsSource="{x:Bind ViewModel.ScheduleEntries, Mode=OneWay}" 
                               Height="200" 
@@ -143,10 +172,16 @@
                                 Margin="0,0,10,0"/>
                     </StackPanel>
                 </StackPanel>
-            </Expander>
+                </ContentControl>
+            </StackPanel>
 
             <!-- Backup Settings -->
-            <Expander Header="Backup Settings" Margin="0,0,0,20">
+            <StackPanel Margin="0,0,0,20">
+                <ToggleButton x:Name="S6Tgl" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                              FontSize="16" FontWeight="SemiBold" Padding="12,8">
+                    <TextBlock Text="Backup Settings"/>
+                </ToggleButton>
+                <ContentControl Visibility="{Binding IsChecked, ElementName=S6Tgl}">
                 <StackPanel Padding="10">
                     <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,0,0,10">
                         <CheckBox x:Name="LocalBackupCheckBox" 
@@ -175,10 +210,16 @@
                                 Margin="0,0,10,0"/>
                     </StackPanel>
                 </StackPanel>
-            </Expander>
+                </ContentControl>
+            </StackPanel>
 
             <!-- OneDrive Settings -->
-            <Expander Header="OneDrive Settings" Margin="0,0,0,20">
+            <StackPanel Margin="0,0,0,20">
+                <ToggleButton x:Name="S7Tgl" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                              FontSize="16" FontWeight="SemiBold" Padding="12,8">
+                    <TextBlock Text="OneDrive Settings"/>
+                </ToggleButton>
+                <ContentControl Visibility="{Binding IsChecked, ElementName=S7Tgl}">
                 <StackPanel Padding="10">
                     <TextBlock x:Name="OneDriveStatusText" 
                                Text="{x:Bind ViewModel.OneDriveStatus, Mode=OneWay}" 
@@ -193,10 +234,16 @@
                                 Margin="0,0,10,0"/>
                     </StackPanel>
                 </StackPanel>
-            </Expander>
+                </ContentControl>
+            </StackPanel>
 
             <!-- Update Settings -->
-            <Expander Header="Update Settings" Margin="0,0,0,20">
+            <StackPanel Margin="0,0,0,20">
+                <ToggleButton x:Name="S8Tgl" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                              FontSize="16" FontWeight="SemiBold" Padding="12,8">
+                    <TextBlock Text="Update Settings"/>
+                </ToggleButton>
+                <ContentControl Visibility="{Binding IsChecked, ElementName=S8Tgl}">
                 <StackPanel Padding="10">
                     <TextBlock Text="Current Version: 1.0.0" 
                                Margin="0,0,0,10"/>
@@ -205,10 +252,16 @@
                             Command="{x:Bind ViewModel.CheckForUpdatesCommand}" 
                             Margin="0,0,0,10"/>
                 </StackPanel>
-            </Expander>
+                </ContentControl>
+            </StackPanel>
 
             <!-- Tile Settings -->
-            <Expander Header="Tile Settings" Margin="0,0,0,20">
+            <StackPanel Margin="0,0,0,20">
+                <ToggleButton x:Name="S9Tgl" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                              FontSize="16" FontWeight="SemiBold" Padding="12,8">
+                    <TextBlock Text="Tile Settings"/>
+                </ToggleButton>
+                <ContentControl Visibility="{Binding IsChecked, ElementName=S9Tgl}">
                 <StackPanel Padding="10">
                     <TextBlock Text="Tile Display Period:" Margin="0,0,0,10"/>
                     <ComboBox x:Name="TilePeriodComboBox" 
@@ -229,7 +282,8 @@
                               HorizontalAlignment="Stretch" 
                               Margin="0,0,0,10"/>
                 </StackPanel>
-            </Expander>
+                </ContentControl>
+            </StackPanel>
             </StackPanel>
         </ScrollViewer>
     </Grid>
