@@ -107,14 +107,32 @@ jobs:
             }
           }
           foreach ($req in @(
-            "packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8",
-            "packages\Newtonsoft.Json.12.0.3",
-            "packages\DocumentFormat.OpenXml.2.9.1",
+            "packages\microsoft.netcore.universalwindowsplatform.6.0.8",
+            "packages\newtonsoft.json.12.0.3",
+            "packages\documentformat.openxml.2.9.1",
             "packages\system.runtime.4.1.0",
             "packages\system.objectmodel.4.0.12",
-            "packages\System.Runtime.WindowsRuntime.UI.Xaml.4.0.1")) {
+            "packages\system.runtime.windowsruntime.ui.xaml.4.0.1")) {
             if (-not (Test-Path $req)) { Write-Host "::error::restore missing $req"; exit 1 }
           }
+          # v1.4.0.11c: case-mirror junctions — restored dirs are lowercase (normalized
+          # packages.config ids), csproj HintPaths use canonical casing. NTFS is case-insensitive,
+          # but MSBuild reference resolution compares names case-sensitively in some code paths
+          # (MSB3245 -> WMC0003). Create PascalCase mirrors for every restored package dir so the
+          # HintPath spelling always resolves to a real directory entry.
+          $pcNames = @('Microsoft.NETCore.UniversalWindowsPlatform','Newtonsoft.Json','DocumentFormat.OpenXml','Microsoft.Net.Native.Compiler','Microsoft.NETCore','Microsoft.NETCore.Platforms','Microsoft.NETCore.Portable.Compatibility','Microsoft.NETCore.Runtime.CoreCLR','Microsoft.NETCore.Targets','Microsoft.Win32.Primitives','System.Collections','System.Collections.Concurrent','System.Collections.NonGeneric','System.Collections.Specialized','System.ComponentModel.EventBasedAsync','System.Data.Common','System.Diagnostics.Contracts','System.Diagnostics.Debug','System.Diagnostics.DiagnosticSource','System.Diagnostics.StackTrace','System.Diagnostics.Tracing','System.Globalization','System.Globalization.Calendars','System.IO','System.IO.Compression','System.IO.FileSystem','System.IO.FileSystem.Primitives','System.IO.IsolatedStorage','System.Linq','System.Linq.Expressions','System.Linq.Queryable','System.Net.Http','System.Net.Http.Rtc','System.Net.NameResolution','System.Net.Primitives','System.Net.Requests','System.Net.Sockets','System.Net.WebHeaderCollection','System.Net.WebSockets','System.Net.WebSockets.Client','System.Numerics.Vectors.WindowsRuntime','System.ObjectModel','System.Private.DataContractSerialization','System.Private.ServiceModel','System.Reflection','System.Reflection.Context','System.Reflection.DispatchProxy','System.Reflection.Emit','System.Reflection.Emit.ILGeneration','System.Reflection.Emit.Lightweight','System.Reflection.Extensions','System.Reflection.Primitives','System.Reflection.TypeExtensions','System.Resources.ResourceManager','System.Runtime','System.Runtime.Extensions','System.Runtime.Handles','System.Runtime.InteropServices','System.Runtime.InteropServices.WindowsRuntime','System.Runtime.Numerics','System.Runtime.Serialization.Json','System.Runtime.Serialization.Primitives','System.Runtime.Serialization.Xml','System.Runtime.WindowsRuntime','System.Runtime.WindowsRuntime.UI.Xaml','System.Security.Claims','System.Security.Cryptography.Algorithms','System.Security.Cryptography.Cng','System.Security.Cryptography.Encoding','System.Security.Cryptography.Primitives','System.Security.Cryptography.X509Certificates','System.Security.Principal','System.ServiceModel.Duplex','System.ServiceModel.Http','System.ServiceModel.NetTcp','System.ServiceModel.Primitives','System.ServiceModel.Security','System.Text.Encoding','System.Text.Encoding.CodePages','System.Text.Encoding.Extensions','System.Text.RegularExpressions','System.Threading','System.Threading.Overlapped','System.Threading.Tasks','System.Threading.Tasks.Extensions','System.Threading.Timer','System.Xml.ReaderWriter','System.Xml.XmlDocument','System.Xml.XmlSerializer')
+          [xml]$pcx = Get-Content "Barometer_UWP\packages.config"
+          foreach ($n in $pcx.packages.package) {
+            $ldir = "packages\$($n.id).$($n.version)"   # lowercase id (normalized)
+            if (-not (Test-Path $ldir)) { continue }
+            $pascal = $null
+            foreach ($cn in $pcNames) { if ($cn.ToLowerInvariant() -eq $n.id) { $pascal = "$cn.$($n.version)"; break } }
+            if ($pascal) {
+              $pdir = "packages\$pascal"
+              if (-not (Test-Path $pdir)) { cmd /c mklink /J "`"$pdir`"" "`"$((Resolve-Path $ldir).Path)`"" | Out-Null }
+            }
+          }
+          Write-Host ("mirror count: " + (Get-ChildItem packages -Directory | Where-Object { $_.Name -cne $_.Name.ToLowerInvariant() }).Count)
           Get-ChildItem packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8 -Recurse -Filter *.winmd | Select-Object -First 3 FullName
 
       - name: Flatten UWP metapackage dependencies (nuget.exe CLI does not install transitive deps)
