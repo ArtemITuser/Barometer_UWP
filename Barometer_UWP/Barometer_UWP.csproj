@@ -72,6 +72,7 @@
     <Compile Include="BackgroundTasks\BackupTask.cs" />
     <Compile Include="Helpers\BackgroundHelper.cs" />
     <Compile Include="Helpers\SkyMap.cs" />
+    <Compile Include="Helpers\FormatConverter.cs" />
     <Compile Include="Helpers\ChartRenderer.cs" />
     <Compile Include="Helpers\ImageEncoder.cs" />
     <Compile Include="Helpers\WriteableBitmapEx.cs" />
@@ -176,8 +177,12 @@
          fails with WMC0003 "cannot resolve System.Runtime.WindowsRuntime.UI.Xaml /
          System.ObjectModel". These are the WinRT INotifyPropertyChanged projection and
          ObservableCollection facades used by all binding-enabled pages. -->
+    <!-- NOTE: this facade package ships ONLY reference assemblies (lib/ has _._
+         placeholders; the real implementation lives in the .NET runtime). The DLL
+         is under ref/netcore50, NOT lib/uap10.0_* — previous HintPath pointed to a
+         nonexistent path, causing MSB3245 + 100+ WMC0003 errors on every {Binding}. -->
     <Reference Include="System.Runtime.WindowsRuntime.UI.Xaml">
-      <HintPath>$(MSBuildThisFileDirectory)..\packages\System.Runtime.WindowsRuntime.UI.Xaml.4.0.1\lib\uap10.0_10254\System.Runtime.WindowsRuntime.UI.Xaml.dll</HintPath>
+      <HintPath>$(MSBuildThisFileDirectory)..\packages\System.Runtime.WindowsRuntime.UI.Xaml.4.0.1\ref\netcore50\System.Runtime.WindowsRuntime.UI.Xaml.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System.ObjectModel">

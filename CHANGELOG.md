@@ -61,3 +61,8 @@
   transitive dependency closure of the UWP metapackage (System.Runtime facade etc. absent).
   Added `nuget restore Barometer_UWP.sln` step + pre-flatten verification.
 - nuget.g.props generation now resolves System.Runtime.dll dynamically from the packages tree.
+
+## v1.4.0.12 (hotfix)
+- csproj: fixed HintPath for System.Runtime.WindowsRuntime.UI.Xaml — package ships ref-only assemblies (lib/ contains _._ placeholders); previous lib/uap10.0_10254 path did not exist -> MSB3245 + 114 WMC0003 errors on all {Binding} pages. Now points to ref/netcore50/.
+- XAML: removed all StringFormat usages (unsupported by UWP Binding/x:Bind -> WMC0011). MainPage list now binds preformatted TimeText/HpaText/MmHgText helpers on PressureRecord; SettingsPage frequency label uses CollectionFrequencySecondsText; added reusable Helpers/FormatConverter.cs (IValueConverter) registered in both pages' resources.
+- Versions bumped to 1.4.0.12 (appxmanifest, AssemblyInfo).

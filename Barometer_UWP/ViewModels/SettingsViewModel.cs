@@ -226,8 +226,11 @@ namespace Barometer_UWP.ViewModels
         public int CollectionFrequency
         {
             get => _collectionFrequency;
-            set { _collectionFrequency = value; OnPropertyChanged(); _ = SaveSettingsAsync(); }
+            set { _collectionFrequency = value; OnPropertyChanged(); OnPropertyChanged(nameof(CollectionFrequencySecondsText)); _ = SaveSettingsAsync(); }
         }
+
+        // x:Bind display helper (UWP Binding/x:Bind have no StringFormat — WMC0011)
+        public string CollectionFrequencySecondsText => _collectionFrequency + " seconds";
 
         public bool UseNightMode
         {
