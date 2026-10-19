@@ -439,28 +439,20 @@ namespace Barometer_UWP.ViewModels
                     _cachedPng = await ImageEncoder.EncodeAsync(_chartBitmap, true);
                 if (_cachedPng != null)
                 {
-                    var png = _cachedPng;
-                    data.ResourceMap.Add("image/png",
-                        RandomAccessStreamReference.CreateFromStream(
-                            new InMemoryRandomAccessStreamWithContent(png)));
+                    // v1.4.0.15: InMemoryRandomAccessStream is sealed — cannot derive from it.
+                    // Create the stream, write bytes into it directly (async-safe here).
+                    var stream = new InMemoryRandomAccessStream();
+                    using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
+                    {
+                        writer.WriteBytes(_cachedPng);
+                        await writer.StoreAsync();
+                        await writer.FlushAsync();
+                    }
+                    stream.Seek(0);
+                    data.ResourceMap.Add("image/png", RandomAccessStreamReference.CreateFromStream(stream));
                 }
             }
             finally { deferral.Complete(); }
-        }
-
-        /// <summary>In-memory RandomAccessStream preloaded with bytes.</summary>
-        private sealed class InMemoryRandomAccessStreamWithContent : InMemoryRandomAccessStream
-        {
-            public InMemoryRandomAccessStreamWithContent(byte[] content)
-            {
-                using (var writer = new DataWriter(this.GetOutputStreamAt(0)))
-                {
-                    writer.WriteBytes(content);
-                    writer.StoreAsync().AsTask().GetAwaiter().GetResult();
-                    writer.FlushAsync().AsTask().GetAwaiter().GetResult();
-                }
-                Seek(0);
-            }
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
