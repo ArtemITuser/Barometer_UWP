@@ -94,7 +94,8 @@ jobs:
             $dir = "packages\$($e.Id).$($e.Ver)"
             if (Test-Path $dir) { continue }
             $lid = $e.Id.ToLowerInvariant()
-            $nupkg = Join-Path $env:TEMP "$lid.$($e.Ver).nupkg"
+            # v1.4.0.11b: Expand-Archive accepts only .zip extension -> save as .zip
+            $nupkg = Join-Path $env:TEMP "$lid.$($e.Ver).zip"
             $url = "https://api.nuget.org/v3-flatcontainer/$lid/$($e.Ver)/$lid.$($e.Ver).nupkg"
             try {
               Invoke-WebRequest $url -OutFile $nupkg -UseBasicParsing
