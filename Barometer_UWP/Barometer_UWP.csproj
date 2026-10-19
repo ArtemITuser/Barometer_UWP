@@ -165,7 +165,9 @@
          ..\packages paths with (wrong CLR flavor -> WMC1006 System.Runtime unresolved).
          $(MSBuildThisFileDirectory) pins them to the restored packages folder. -->
     <Reference Include="Newtonsoft.Json">
-      <HintPath>$(MSBuildThisFileDirectory)..\packages\Newtonsoft.Json.12.0.3\lib\portable-net45+win8\Newtonsoft.Json.dll</HintPath>
+      <!-- v1.4.0.13b: the folder 'portable-net45+win8' does not exist in 12.0.3 (real name is
+           portable-net45+win8+wp8+wpa81); netstandard1.3 is the correct choice for UAP 15063+. -->
+      <HintPath>$(MSBuildThisFileDirectory)..\packages\Newtonsoft.Json.12.0.3\lib\netstandard1.3\Newtonsoft.Json.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="DocumentFormat.OpenXml">
