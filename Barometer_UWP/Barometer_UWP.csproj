@@ -208,6 +208,33 @@
        is never referenced at compile time -> WMC1006 'System.Runtime cannot be resolved'.
        Condition guards keep VS2017 local builds working when obj\nuget.g.props was generated
        by a prior nuget.exe restore. -->
+  <!-- v1.4.0.19 CI fallback: if obj/*.nuget.g.props was NOT generated (nuget.exe CLI
+       does not write it for bare packages.config), manually reference the netcore50
+       type-forwarded facades from the restored packages folder. Without these the
+       compile universe loses mscorlib unification -> CS0012 "add a reference to
+       mscorlib" cascade across App.xaml.cs/ChartRenderer/WriteableBitmapEx.
+       Condition keeps VS2017 local builds untouched (g.props exists there). -->
+  <PropertyGroup Condition="!Exists('$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.props')">
+    <_PkgRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\packages'))</_PkgRoot>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(_PkgRoot)' != '' And Exists('$(_PkgRoot)')">
+    <Reference Include="System.Runtime"><HintPath>$(_PkgRoot)\system.runtime.4.1.0\ref\netcore50\System.Runtime.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="System.Linq"><HintPath>$(_PkgRoot)\system.linq.4.1.0\ref\netcore50\System.Linq.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="System.Collections"><HintPath>$(_PkgRoot)\system.collections.4.0.11\ref\netcore50\System.Collections.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="System.Collections.Concurrent"><HintPath>$(_PkgRoot)\system.collections.concurrent.4.0.12\ref\netcore50\System.Collections.Concurrent.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="System.Runtime.Extensions"><HintPath>$(_PkgRoot)\system.runtime.extensions.4.1.0\ref\netcore50\System.Runtime.Extensions.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="System.Threading.Tasks"><HintPath>$(_PkgRoot)\system.threading.tasks.4.0.11\ref\netcore50\System.Threading.Tasks.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="System.Threading"><HintPath>$(_PkgRoot)\system.threading.4.0.11\ref\netcore50\System.Threading.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="System.Globalization"><HintPath>$(_PkgRoot)\system.globalization.4.0.11\ref\netcore50\System.Globalization.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="System.IO"><HintPath>$(_PkgRoot)\system.io.4.1.0\ref\netcore50\System.IO.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="System.Resources.ResourceManager"><HintPath>$(_PkgRoot)\system.resources.resourcemanager.4.0.1\ref\netcore50\System.Resources.ResourceManager.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="System.Diagnostics.Debug"><HintPath>$(_PkgRoot)\system.diagnostics.debug.4.0.11\ref\netcore50\System.Diagnostics.Debug.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="System.Private.Uri"><HintPath>$(_PkgRoot)\system.private.uri.4.0.1\ref\netcore50\System.Private.Uri.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="System.ObjectModel"><HintPath>$(_PkgRoot)\system.objectmodel.4.0.12\ref\netcore50\System.ObjectModel.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="System.Net.Http"><HintPath>$(_PkgRoot)\system.net.http.4.1.0\ref\netcore50\System.Net.Http.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="System.Runtime.WindowsRuntime"><HintPath>$(_PkgRoot)\system.runtime.windowsruntime.4.0.11\ref\netcore50\System.Runtime.WindowsRuntime.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="System.Runtime.WindowsRuntime.UI.Xaml"><HintPath>$(_PkgRoot)\system.runtime.windowsruntime.ui.xaml.4.0.1\ref\netcore50\System.Runtime.WindowsRuntime.UI.Xaml.dll</HintPath><Private>False</Private></Reference>
+  </ItemGroup>
   <Import Project="$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.props" Condition="Exists('$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.props')" />
   <Import Project="$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.targets" Condition="Exists('$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.targets')" />
 </Project>
