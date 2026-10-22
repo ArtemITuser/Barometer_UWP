@@ -134,14 +134,26 @@ jobs:
           }
           Write-Host ("mirror count: " + (Get-ChildItem packages -Directory | Where-Object { $_.Name -cne $_.Name.ToLowerInvariant() }).Count)
           Get-ChildItem packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8 -Recurse -Filter *.winmd | Select-Object -First 3 FullName
-          # v1.4.0.12c: verify every HintPath referenced from the csproj actually exists,
-          # and fail fast with a clear message instead of CS0012/CS0234 at compile time.
+          # v1.4.0.21: HintPath precheck rewritten. The old check expanded only
+          # $(MSBuildThisFileDirectory); the CI-fallback block refs use $(_PkgRoot), which was
+          # never substituted -> false "missing on disk" failures that skipped the build step.
+          # Now both property spellings resolve, and Condition-guarded refs are treated as
+          # optional (they drop out of the compile universe via Exists() when absent).
           [xml]$csproj = Get-Content "Barometer_UWP\Barometer_UWP.csproj"
+          $pkgAbs = (Resolve-Path ".\packages").Path
           $badRef = $false
-          foreach ($r in $csproj.Project.ItemGroup.Reference | Where-Object { $_.HintPath }) {
-            $p = $r.HintPath.Replace('$(MSBuildThisFileDirectory)', 'Barometer_UWP\').Replace('\', '/')
-            if (-not (Test-Path $p)) { Write-Host "::error::HintPath missing on disk: $($r.HintPath)"; $badRef = $true }
-            else { Write-Host "OK ref: $($r.HintPath)" }
+          foreach ($ig in $csproj.Project.ItemGroup) {
+            foreach ($r in @($ig.Reference)) {
+              if (-not $r.HintPath) { continue }
+              $hp = $r.HintPath.Replace('$(MSBuildThisFileDirectory)', 'Barometer_UWP\')
+              $hp = $hp -replace '\$\(MSBuildThisFileDirectory\)\.\.\\packages', $pkgAbs
+              $hp = $hp.Replace('$(_PkgRoot)', $pkgAbs)
+              $guarded = ($ig.Condition -or $r.Condition)
+              if (-not (Test-Path $hp)) {
+                if ($guarded) { Write-Host "WARN optional facade absent (dropped by Exists guard): $($r.Include)" }
+                else { Write-Host "::error::HintPath missing on disk: $($r.HintPath)"; $badRef = $true }
+              } else { Write-Host "OK ref: $($r.Include)" }
+            }
           }
           if ($badRef) { exit 1 }
 
