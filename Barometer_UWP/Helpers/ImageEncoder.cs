@@ -23,7 +23,14 @@ namespace Barometer_UWP.Helpers
                     : BitmapEncoder.JpegEncoderId;
 
                 var decoder = await BitmapDecoder.CreateAsync(stream);
-                var pixelData = await decoder.GetPixelDataAsync();
+                // Explicit overload: BGRA8 premultiplied — the parameterless GetPixelDataAsync()
+                // does not exist on Win10 15063/15254 (added in later SDKs) and broke CI compile.
+                var pixelData = await decoder.GetPixelDataAsync(
+                    BitmapPixelFormat.Bgra8,
+                    BitmapAlphaMode.Premultiplied,
+                    new BitmapTransform(),
+                    ExponentialOrderByOptions.Default,
+                    new BitmapPropertySet());
 
                 using (var outStream = new InMemoryRandomAccessStream())
                 {

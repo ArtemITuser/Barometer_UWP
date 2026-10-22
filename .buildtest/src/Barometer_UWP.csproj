@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">ARM</Platform>
+    <ProjectGuid>{C8D8B5A6-8C5A-4C5A-8C5A-4C5A8C5A8C5A}</ProjectGuid>
+    <OutputType>AppContainerExe</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>Barometer_UWP</RootNamespace>
+    <AssemblyName>Barometer_UWP</AssemblyName>
+    <DefaultLanguage>ru-RU</DefaultLanguage>
+    <TargetPlatformIdentifier>UAP</TargetPlatformIdentifier>
+    <TargetPlatformVersion>10.0.15254.0</TargetPlatformVersion>
+    <TargetPlatformMinVersion>10.0.15063.0</TargetPlatformMinVersion>
+    <MinimumVisualStudioVersion>14</MinimumVisualStudioVersion>
+    <FileAlignment>512</FileAlignment>
+    <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <WindowsXamlEnableOverview>true</WindowsXamlEnableOverview>
+    <PackageCertificateKeyFile>Barometer_UWP_TemporaryKey.pfx</PackageCertificateKeyFile>
+    <AppxBundle>Never</AppxBundle>
+    <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|ARM'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\ARM\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <NoWarn>;2008</NoWarn>
+    <DebugType>full</DebugType>
+    <PlatformTarget>ARM</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <ErrorReport>prompt</ErrorReport>
+    <Prefer32Bit>true</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|ARM'">
+    <OutputPath>bin\ARM\Release\</OutputPath>
+    <DefineConstants>TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <Optimize>true</Optimize>
+    <NoWarn>;2008</NoWarn>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>ARM</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <ErrorReport>prompt</ErrorReport>
+    <Prefer32Bit>true</Prefer32Bit>
+    <UseDotNetNativeToolchain>true</UseDotNetNativeToolchain>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x86\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <NoWarn>;2008</NoWarn>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
+    <OutputPath>bin\x86\Release\</OutputPath>
+    <DefineConstants>TRACE;NETFX_CORE;WINDOWS_UWP</DefineConstants>
+    <Optimize>true</Optimize>
+    <NoWarn>;2008</NoWarn>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <ErrorReport>prompt</ErrorReport>
+    <UseDotNetNativeToolchain>true</UseDotNetNativeToolchain>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="App.xaml.cs">
+      <DependentUpon>App.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="BackgroundTasks\BackupTask.cs" />
+    <Compile Include="Helpers\BackgroundHelper.cs" />
+    <Compile Include="Helpers\SkyMap.cs" />
+    <Compile Include="Helpers\FormatConverter.cs" />
+    <Compile Include="Helpers\ChartRenderer.cs" />
+    <Compile Include="Helpers\ImageEncoder.cs" />
+    <Compile Include="Helpers\WriteableBitmapEx.cs" />
+    <Compile Include="ServiceContainer.cs" />
+    <Compile Include="Helpers\CsvHelper.cs" />
+    <Compile Include="Helpers\ExcelHelper.cs" />
+    <Compile Include="Helpers\Logger.cs" />
+    <Compile Include="Helpers\RelayCommand.cs" />
+    <Compile Include="Helpers\UnitConverter.cs" />
+    <Compile Include="Models\BackupMetadata.cs" />
+    <Compile Include="Models\PressureRecord.cs" />
+    <Compile Include="Models\ScheduleEntry.cs" />
+    <Compile Include="Models\ThemeMode.cs" />
+    <Compile Include="Models\UnitMode.cs" />
+    <Compile Include="Services\AuthService.cs" />
+    <Compile Include="Services\DataService.cs" />
+    <Compile Include="Services\ExportService.cs" />
+    <Compile Include="Services\LocationService.cs" />
+    <Compile Include="Services\OneDriveService.cs" />
+    <Compile Include="Services\ScheduleService.cs" />
+    <Compile Include="Services\SensorService.cs" />
+    <Compile Include="Services\TileService.cs" />
+    <Compile Include="Services\UpdateService.cs" />
+    <Compile Include="Strings\ResourceLoaderProvider.cs" />
+    <Compile Include="ViewModels\GraphicsViewModel.cs" />
+    <Compile Include="ViewModels\MainViewModel.cs" />
+    <Compile Include="ViewModels\SettingsViewModel.cs" />
+    <Compile Include="Views\ChartMiniTile.xaml.cs">
+      <DependentUpon>ChartMiniTile.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\GraphicsPage.xaml.cs">
+      <DependentUpon>GraphicsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\MainPage.xaml.cs">
+      <DependentUpon>MainPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\SettingsPage.xaml.cs">
+      <DependentUpon>SettingsPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <AppxManifest Include="Package.appxmanifest">
+      <SubType>Designer</SubType>
+    </AppxManifest>
+    <None Include="Barometer_UWP_TemporaryKey.pfx" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Assets\LockScreenLogo.scale-200.png" />
+    <Content Include="Assets\SplashScreen.scale-200.png" />
+    <Content Include="Assets\Square150x150Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
+    <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <Content Include="Properties\Default.rd.xml" />
+    <PRIResource Include="Strings\en-US\Resources.resw" />
+    <PRIResource Include="Strings\ru-RU\Resources.resw" />
+  </ItemGroup>
+  <ItemGroup>
+    <ApplicationDefinition Include="App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </ApplicationDefinition>
+    <Page Include="Views\ChartMiniTile.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\GraphicsPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\MainPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\SettingsPage.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Mobile-compatible package set (Win10 15063 ARM/ARM64): no OxyPlot.UWP,
+         no Microsoft.Graph 4.x / MSAL 4.x / Community Toolkit 7.x (unsupported).
+         packages.config style: required for classic UAP csproj on VS2017 and modern
+         MSBuild images (PackageReference in legacy project system does not wire the
+         UWP .NET Native toolchain -> WinRT projections missing at compile time).
+         NOTE: HintPaths must be absolute-safe: CI runners have a global Newtonsoft.Json
+         under Program Files that MSBuild's simple-name resolution can shadow relative
+         ..\packages paths with (wrong CLR flavor -> WMC1006 System.Runtime unresolved).
+         $(MSBuildThisFileDirectory) pins them to the restored packages folder. -->
+    <Reference Include="Newtonsoft.Json">
+      <!-- v1.4.0.13b: the folder 'portable-net45+win8' does not exist in 12.0.3 (real name is
+           portable-net45+win8+wp8+wpa81); netstandard1.3 is the correct choice for UAP 15063+. -->
+      <HintPath>$(MSBuildThisFileDirectory)..\packages\Newtonsoft.Json.12.0.3\lib\netstandard1.3\Newtonsoft.Json.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="DocumentFormat.OpenXml">
+      <HintPath>$(MSBuildThisFileDirectory)..\packages\DocumentFormat.OpenXml.2.9.1\lib\netstandard1.3\DocumentFormat.OpenXml.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <!-- v1.4.0.16: DocumentFormat.OpenXml 2.9.1 (netstandard1.3) types Package/PackagePart
+         live in System.IO.Packaging — required compile-time reference for XLSX export/import. -->
+    <Reference Include="System.IO.Packaging">
+      <HintPath>$(MSBuildThisFileDirectory)..\packages\System.IO.Packaging.4.0.0\ref\netstandard1.3\System.IO.Packaging.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <!-- XamlCompiler (WMC) type universe does NOT follow NuGet transitive refs of the
+         UAP metapackage: without explicit References below, every {Binding ...} in XAML
+         fails with WMC0003 "cannot resolve System.Runtime.WindowsRuntime.UI.Xaml /
+         System.ObjectModel". These are the WinRT INotifyPropertyChanged projection and
+         ObservableCollection facades used by all binding-enabled pages. -->
+    <!-- NOTE: this facade package ships ONLY reference assemblies (lib/ has _._
+         placeholders; the real implementation lives in the .NET runtime). The DLL
+         is under ref/netcore50, NOT lib/uap10.0_* — previous HintPath pointed to a
+         nonexistent path, causing MSB3245 + 100+ WMC0003 errors on every {Binding}. -->
+    <Reference Include="System.Runtime.WindowsRuntime.UI.Xaml">
+      <HintPath>$(MSBuildThisFileDirectory)..\packages\System.Runtime.WindowsRuntime.UI.Xaml.4.0.1\ref\netcore50\System.Runtime.WindowsRuntime.UI.Xaml.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.ObjectModel">
+      <!-- v1.4.0.12c: use the netcore50 facade (type-forwarded to mscorlib), NOT the
+           netstandard1.3 implementation assembly. Referencing the ns1.3 dll injects a
+           duplicate System.Object into the compile universe -> CS0012 "add a reference to
+           mscorlib" + CS0234 System.Linq/System.Collections missing across all files. -->
+      <HintPath>$(MSBuildThisFileDirectory)..\packages\System.ObjectModel.4.0.12\ref\netcore50\System.ObjectModel.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
+    <VisualStudioVersion>14.0</VisualStudioVersion>
+  </PropertyGroup>
+  <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
+  <!-- packages.config NuGet wiring: without these imports the restored metapackage
+       Microsoft.NETCore.UniversalWindowsPlatform (WinRT projections + System.Runtime facade)
+       is never referenced at compile time -> WMC1006 'System.Runtime cannot be resolved'.
+       Condition guards keep VS2017 local builds working when obj\nuget.g.props was generated
+       by a prior nuget.exe restore. -->
+  <Import Project="$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.props" Condition="Exists('$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.props')" />
+  <Import Project="$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.targets" Condition="Exists('$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.targets')" />
+</Project>

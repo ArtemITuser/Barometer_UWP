@@ -1,0 +1,22 @@
+<UserControl
+    x:Class="Barometer_UWP.Views.ChartMiniTile"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    d:DesignWidth="310" d:DesignHeight="150">
+
+    <Grid Background="Transparent">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <StackPanel Orientation="Horizontal" Grid.Row="0" Spacing="6">
+            <TextBlock x:Name="ValueText" Text="--" FontSize="24" FontWeight="SemiBold"/>
+            <TextBlock x:Name="UnitText" Text="мм рт. ст." FontSize="14" VerticalAlignment="Bottom"
+                       Margin="0,0,0,5" Opacity="0.7"/>
+        </StackPanel>
+        <Canvas x:Name="ChartCanvas" Grid.Row="1" SizeChanged="ChartCanvas_SizeChanged"/>
+    </Grid>
+</UserControl>
