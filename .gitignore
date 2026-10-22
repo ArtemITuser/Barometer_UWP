@@ -1,1 +1,35 @@
-(empty)
+# Build outputs
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+AppPackages/
+BundleArtifacts/
+*.appx
+*.appxbundle
+*.pri
+
+# VS / user files
+.vs/
+UserSettings/
+*.user
+*.suo
+*.userprefs
+
+# NuGet
+packages/
+*.nupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Test harness (local only)
+.buildtest/
+
+# Logs
+*.log
+logs/

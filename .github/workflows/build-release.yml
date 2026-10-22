@@ -172,14 +172,23 @@ jobs:
           New-Item -ItemType Directory -Force -Path $objDir | Out-Null
           $pkgRoot = Join-Path (Get-Location).Path "packages"
           $solRoot = (Get-Location).Path
-          # metapackage layout: lib\uap10.0 lives in the *transitive* Microsoft.NETCore.UWPLibraryPack,
-          # not in the metapackage folder itself. Resolve System.Runtime.dll wherever it actually is.
-          $rt = Get-ChildItem $pkgRoot -Recurse -Filter System.Runtime.dll |
-                Where-Object { $_.FullName -match 'Microsoft\.NETCore\.UniversalWindowsPlatform' } |
-                Select-Object -First 1
-          if (-not $rt) { $rt = Get-ChildItem $pkgRoot -Recurse -Filter System.Runtime.dll | Select-Object -First 1 }
-          if (-not $rt) { Write-Host "::error::System.Runtime.dll not found anywhere under packages\"; exit 1 }
+          # v1.4.0.16b ROOT CAUSE of CS0012-mscorlib/CS0234-System.Linq cascade:
+          # picking the netstandard1.3 *implementation* System.Runtime.dll injects a duplicate
+          # System.Object into the compile universe (it does NOT type-forward to mscorlib).
+          # Must use the netcore50 *facade* assemblies (type-forwarded), exactly like the
+          # System.ObjectModel fix in csproj. Prefer ref/netcore50, then any netcore50 facade.
+          $all = @(Get-ChildItem $pkgRoot -Recurse -Filter System.Runtime.dll)
+          $rt = $all | Where-Object { $_.FullName -match '\\ref\\netcore50\\' } | Select-Object -First 1
+          if (-not $rt) { $rt = $all | Where-Object { $_.FullName -match 'netcore50' } | Select-Object -First 1 }
+          if (-not $rt) { Write-Host "::error::no netcore50 System.Runtime facade found"; $all | ForEach-Object { Write-Host $_.FullName }; exit 1 }
           Write-Host "Using facade: $($rt.FullName)"
+          # Same rule for every other facade used by app code: enumerate restored ref/netcore50
+          # dlls and add them as explicit references so CSC never sees ns1.3 impl duplicates.
+          $extraRefs = @()
+          foreach ($name in @('System.Linq','System.Collections','System.Runtime.Extensions','System.Threading.Tasks','System.Globalization','System.IO','System.Resources.ResourceManager','System.Diagnostics.Debug','System.Private.Uri')) {
+            $f = Get-ChildItem $pkgRoot -Recurse -Filter "$name.dll" | Where-Object { $_.FullName -match '\\ref\\netcore50\\' } | Select-Object -First 1
+            if ($f) { $extraRefs += ,@($name, $f.FullName) } else { Write-Host "WARN: no netcore50 facade for $name" }
+          }
           # Build the props file line-by-line to avoid here-string/YAML indentation pitfalls.
           $lines = @(
             '<?xml version="1.0" encoding="utf-8"?>',
@@ -193,10 +202,17 @@ jobs:
             '  <ItemGroup>',
             '    <Reference Include="System.Runtime">',
             "      <HintPath>$($rt.FullName)</HintPath>",
-            '    </Reference>',
-            '  </ItemGroup>',
-            '</Project>'
+            '      <Private>False</Private>',
+            '    </Reference>'
           )
+          foreach ($er in $extraRefs) {
+            $lines += '    <Reference Include="' + $er[0] + '">'
+            $lines += '      <HintPath>' + $er[1] + '</HintPath>'
+            $lines += '      <Private>False</Private>'
+            $lines += '    </Reference>'
+          }
+          $lines += '  </ItemGroup>'
+          $lines += '</Project>'
           Set-Content (Join-Path $objDir "Barometer_UWP.nuget.g.props") $lines -Encoding UTF8
           Set-Content (Join-Path $objDir "Barometer_UWP.nuget.g.targets") @(
             '<?xml version="1.0" encoding="utf-8"?>',

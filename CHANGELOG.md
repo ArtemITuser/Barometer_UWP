@@ -66,3 +66,7 @@
 - csproj: fixed HintPath for System.Runtime.WindowsRuntime.UI.Xaml — package ships ref-only assemblies (lib/ contains _._ placeholders); previous lib/uap10.0_10254 path did not exist -> MSB3245 + 114 WMC0003 errors on all {Binding} pages. Now points to ref/netcore50/.
 - XAML: removed all StringFormat usages (unsupported by UWP Binding/x:Bind -> WMC0011). MainPage list now binds preformatted TimeText/HpaText/MmHgText helpers on PressureRecord; SettingsPage frequency label uses CollectionFrequencySecondsText; added reusable Helpers/FormatConverter.cs (IValueConverter) registered in both pages' resources.
 - Versions bumped to 1.4.0.12 (appxmanifest, AssemblyInfo).
+
+## v1.4.0.16 (2026-10-22)
+- FIX: ImageEncoder — parameterless BitmapDecoder.GetPixelDataAsync() does not exist on Win10 15063/15254 API surface; switched to explicit overload (Bgra8/Premultiplied/BitmapTransform/ExponentialOrderByOptions.Default/BitmapPropertySet). This was the last known CI compile blocker.
+- Version bump 1.4.0.15 -> 1.4.0.16 (appxmanifest + AssemblyInfo).
