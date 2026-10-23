@@ -200,15 +200,31 @@ jobs:
           # v1.4.0.22b: env vars written via Add-Content GITHUB_ENV are only interpolated into
           # GH expressions at JOB start - use the live $env: variable instead, and probe
           # all installed UnionMetadata dirs (pick newest) rather than assuming a match.
+          # v1.4.0.25 FIX: this step failed on windows-2022 because it hard-exited when no
+          # UnionMetadata\*\*.winmd was found. Modern images ship SDKs WITHOUT the OneCore
+          # (Mobile) contract, so UAP 15254 is absent -> exit 1 killed the job before msbuild.
+          # The winmd universe is NOT needed here at all (Xaml.CSharp.targets resolves it via
+          # WindowsSDKVersion), so the probe is now purely diagnostic: warn and continue.
           $umRoot = "C:\Program Files (x86)\Windows Kits\10\UnionMetadata"
-          $umVer = $null; $winmd = $null
-          foreach ($cand in @($env:UAP_PINNED_VERSION) + @(Get-ChildItem $umRoot -Directory | Sort-Object {[version]$_.Name} -Descending | ForEach-Object Name)) {
-            $d = Join-Path $umRoot $cand
-            if (Test-Path $d) { $found = @(Get-ChildItem $d -Recurse -Filter "*.winmd" -ErrorAction SilentlyContinue) } else { $found = @() }
-            if ($found.Count -gt 0) { $umVer = $cand; $winmd = $found; break }
+          if (Test-Path $umRoot) {
+            $dirs = @(Get-ChildItem $umRoot -Directory -EA SilentlyContinue)
+            foreach ($d in $dirs) {
+              $n = @(Get-ChildItem $d.FullName -Recurse -Filter "*.winmd" -EA SilentlyContinue).Count
+              Write-Host ("  UnionMetadata\$($d.Name): $n winmd")
+            }
+            $onecore = $false
+            foreach ($d in $dirs) {
+              $u = Join-Path $d.FullName "OneCore.winmd"
+              if (Test-Path $u) { $onecore = $true }
+              $fa = Join-Path $d.FullName "Facade"
+              if ((Get-ChildItem $fa -Filter "*.winmd" -EA SilentlyContinue | Measure-Object).Count -gt 5) { $onecore = $true }
+            }
+            if (-not $onecore) {
+              Write-Host "::warning::No OneCore/Windows.Mobile winmd universe found on this runner - Mobile-targeted UWP build may fail at XamlCompiler. Consider self-hosted VS2017 runner."
+            }
+          } else {
+            Write-Host "::warning::$umRoot missing - Windows 10 SDK not installed on runner?"
           }
-          if (-not $winmd) { Write-Host "::error::no *.winmd under $umRoot (pinned=$($env:UAP_PINNED_VERSION))"; Get-ChildItem $umRoot -Directory -EA SilentlyContinue | ForEach-Object { Write-Host $_.FullName }; exit 1 }
-          Write-Host ("SDK winmd universe OK: " + $winmd.Count + " files (UAP $umVer)")
           # Build the props file line-by-line to avoid here-string/YAML indentation pitfalls.
           $lines = @(
             '<?xml version="1.0" encoding="utf-8"?>',
@@ -230,8 +246,12 @@ jobs:
           Get-Content (Join-Path $objDir "Barometer_UWP.nuget.g.props")
 
       - name: Build Release|ARM (ARM32, Lumia 950 / Elite x3)
+        # v1.4.0.25 FIX: use %GITHUB_ENV% live value (set mid-job by the pin step).
+        # ${{ }} expressions are frozen at job start -> were empty here; and PowerShell
+        # core (pwsh) does not expand $(...) command substitution like Windows PowerShell
+        # did — that silently passed a literal flag and broke TargetPlatformVersion.
         shell: cmd
-        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Build /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=$(UAP_PINNED_VERSION) /p:AppxPackageSigningEnabled=false /bl:build-arm.binlog
+        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Build /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=%UAP_PINNED_VERSION% /p:AppxPackageSigningEnabled=false /bl:build-arm.binlog
 
       - name: Upload build diagnostics on failure
         if: failure()
@@ -246,7 +266,7 @@ jobs:
       - name: Build Release|ARM64 (optional)
         if: ${{ inputs.build_arm64 }}
         shell: cmd
-        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Build /p:Configuration=Release /p:Platform=ARM64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=$(UAP_PINNED_VERSION) /p:AppxPackageSigningEnabled=false
+        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Build /p:Configuration=Release /p:Platform=ARM64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=%UAP_PINNED_VERSION% /p:AppxPackageSigningEnabled=false
 
       - name: Collect artifacts
         run: |
