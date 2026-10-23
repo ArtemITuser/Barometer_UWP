@@ -225,6 +225,30 @@ jobs:
           } else {
             Write-Host "::warning::$umRoot missing - Windows 10 SDK not installed on runner?"
           }
+          # v1.4.0.26 FIX (WMC1006 root cause): XamlCompiler resolves the simple identity
+          # 'System.Runtime, Version=4.0.0.0' ONLY from an explicit <Reference> item — the SDK
+          # winmd universe does not provide it as a managed reference on VS2022 runners.
+          # VS's own NuGet targets inject these refs from packages.config; nuget.exe CLI does
+          # NOT, and our previous props carried zero items (v22 theory was wrong). Inject real
+          # Reference items with netcore50 facade HintPaths (ref assemblies, type-forwarded —
+          # never lib/netstandard impl copies, that caused the CS0012 mscorlib cascade in v16b).
+          $refs = New-Object System.Collections.Generic.List[string]
+          foreach ($e in $seen.Values) {
+            $id = $e.Id; $ver = $e.Ver
+            if ($id -notmatch '^(system|microsoft\.netcore)\.' -and $id -ne 'Newtonsoft.Json') { continue }
+            $base = Join-Path $pkgRoot ("$id.$ver")
+            if (-not (Test-Path $base)) { continue }
+            $dll = @()
+            foreach ($pat in @('ref\netcore50','ref\netstandard1.3','ref\netstandard1.0','lib\uap10.0','lib\netcore50')) {
+              $c = Get-ChildItem (Join-Path $base $pat) -Filter '*.dll' -EA SilentlyContinue | Select-Object -First 1
+              if ($c) { $dll = @($c); break }
+            }
+            if (-not $dll) { continue }
+            $asm = [IO.Path]::GetFileNameWithoutExtension($dll[0].Name)
+            $hp = $dll[0].FullName.Replace('','\\')
+            $refs.Add("    <Reference Include=\"$asm\"><HintPath>$hp</HintPath><Private>False</Private></Reference>")
+          }
+          Write-Host ("injected facade references: " + $refs.Count)
           # Build the props file line-by-line to avoid here-string/YAML indentation pitfalls.
           $lines = @(
             '<?xml version="1.0" encoding="utf-8"?>',
@@ -235,6 +259,9 @@ jobs:
             '    <PackagesConfig>true</PackagesConfig>',
             "    <PackagesDir>$pkgRoot\</PackagesDir>",
             '  </PropertyGroup>',
+            '  <ItemGroup>'
+          ) + $refs + @(
+            '  </ItemGroup>',
             '</Project>'
           )
           Set-Content (Join-Path $objDir "Barometer_UWP.nuget.g.props") $lines -Encoding UTF8
