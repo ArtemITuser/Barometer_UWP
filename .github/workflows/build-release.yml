@@ -197,8 +197,8 @@ jobs:
           # -> duplicate System.Object/ValueType/Enum -> CS0012 "add a reference to mscorlib",
           # CS0122 "'Color'/'Point' inaccessible", CS0246 "'Canvas' not found". The props file
           # now carries only NuGet wiring properties; zero <Reference> items.
-          # v1.4.0.22b: env vars written via Add-Content GITHUB_ENV are only expanded into
-          # ${{ }} expressions at JOB start — use the live $env: variable instead, and probe
+          # v1.4.0.22b: env vars written via Add-Content GITHUB_ENV are only interpolated into
+          # GH expressions at JOB start - use the live $env: variable instead, and probe
           # all installed UnionMetadata dirs (pick newest) rather than assuming a match.
           $umRoot = "C:\Program Files (x86)\Windows Kits\10\UnionMetadata"
           $umVer = $null; $winmd = $null
