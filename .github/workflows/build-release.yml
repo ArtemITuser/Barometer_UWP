@@ -197,9 +197,18 @@ jobs:
           # -> duplicate System.Object/ValueType/Enum -> CS0012 "add a reference to mscorlib",
           # CS0122 "'Color'/'Point' inaccessible", CS0246 "'Canvas' not found". The props file
           # now carries only NuGet wiring properties; zero <Reference> items.
-          $winmd = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\UnionMetadata\${{ env.UAP_PINNED_VERSION }}" -ErrorAction SilentlyContinue
-          if (-not $winmd) { Write-Host "::error::UnionMetadata dir missing — SDK winmd universe unavailable"; exit 1 }
-          Write-Host ("SDK winmd universe OK: " + $winmd.Count + " files")
+          # v1.4.0.22b: env vars written via Add-Content GITHUB_ENV are only expanded into
+          # ${{ }} expressions at JOB start — use the live $env: variable instead, and probe
+          # all installed UnionMetadata dirs (pick newest) rather than assuming a match.
+          $umRoot = "C:\Program Files (x86)\Windows Kits\10\UnionMetadata"
+          $umVer = $null; $winmd = $null
+          foreach ($cand in @($env:UAP_PINNED_VERSION) + @(Get-ChildItem $umRoot -Directory | Sort-Object {[version]$_.Name} -Descending | ForEach-Object Name)) {
+            $d = Join-Path $umRoot $cand
+            if (Test-Path $d) { $found = @(Get-ChildItem $d -Recurse -Filter "*.winmd" -ErrorAction SilentlyContinue) } else { $found = @() }
+            if ($found.Count -gt 0) { $umVer = $cand; $winmd = $found; break }
+          }
+          if (-not $winmd) { Write-Host "::error::no *.winmd under $umRoot (pinned=$($env:UAP_PINNED_VERSION))"; Get-ChildItem $umRoot -Directory -EA SilentlyContinue | ForEach-Object { Write-Host $_.FullName }; exit 1 }
+          Write-Host ("SDK winmd universe OK: " + $winmd.Count + " files (UAP $umVer)")
           # Build the props file line-by-line to avoid here-string/YAML indentation pitfalls.
           $lines = @(
             '<?xml version="1.0" encoding="utf-8"?>',
@@ -222,7 +231,7 @@ jobs:
 
       - name: Build Release|ARM (ARM32, Lumia 950 / Elite x3)
         shell: cmd
-        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Build /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }} /p:AppxPackageSigningEnabled=false /bl:build-arm.binlog
+        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Build /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=$(UAP_PINNED_VERSION) /p:AppxPackageSigningEnabled=false /bl:build-arm.binlog
 
       - name: Upload build diagnostics on failure
         if: failure()
@@ -237,7 +246,7 @@ jobs:
       - name: Build Release|ARM64 (optional)
         if: ${{ inputs.build_arm64 }}
         shell: cmd
-        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Build /p:Configuration=Release /p:Platform=ARM64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=${{ env.UAP_PINNED_VERSION }} /p:AppxPackageSigningEnabled=false
+        run: msbuild Barometer_UWP\Barometer_UWP.csproj /t:Build /p:Configuration=Release /p:Platform=ARM64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /p:TargetPlatformVersion=$(UAP_PINNED_VERSION) /p:AppxPackageSigningEnabled=false
 
       - name: Collect artifacts
         run: |
