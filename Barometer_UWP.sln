@@ -2,15 +2,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.28307.711
 MinimumVisualStudioVersion = 15.0.28307.711
-REM ============================================================================
-REM Target: Windows 10 Mobile (Lumia 950 / 950 XL / HP Elite x3), build 15254.603.
-REM ARM (=ARM32) is the PRIMARY platform. x86 exists ONLY for the Mobile emulator
-REM 15254.1 and is strictly optional (do not deploy x86 to devices).
-REM [DISABLED] Debug|ARM64 / Release|ARM64 — ARM64 is NOT supported by Windows 10
-REM Mobile (15254.x/15400.0); enable it only in a separate desktop UWP solution.
-REM [DISABLED] x64 — desktop-only. Keep this mobile sln at ARM32-first.
-REM See BUILD_VS2017.md for the desktop-sln recipe if ARM64/x64 ever needed.
-REM ============================================================================
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Barometer_UWP", "Barometer_UWP\Barometer_UWP.csproj", "{C8D8B5A6-8C5A-4C5A-8C5A-4C5A8C5A8C5A}"
 EndProject
 Global

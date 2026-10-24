@@ -1,6 +1,6 @@
 # Barometer UWP — сборка в Visual Studio 2017 (Windows 10 Mobile / Lumia 950)
 
-**Стабильная ветка релизов:** `releases/stable` · **Версия:** 1.4.0.26 · **Тег:** `v1.4.0.26-stable`
+**Стабильная ветка релизов:** `releases/stable` · **Версия:** 1.4.0.27 · **Тег:** `v1.4.0.27-stable`
 
 ---
 
@@ -66,14 +66,17 @@ Release|ARM    Release|x86
 * **x86 — ТОЛЬКО для эмулятора Mobile 15254.1.** На реальном телефоне не работает;
   оставлена опциональной по требованию ТЗ. Эмулятор ставится тем же SDK-компонентом.
 
-### Почему нет ARM64 и x64 (закомментировано в sln/csproj)
+### Почему нет ARM64 и x64 (задокументировано здесь; в sln — только валидные секции)
 
-В `Barometer_UWP.sln` сохранены комментарии-конспекты:
+Ранее эти заметки хранились в `Barometer_UWP.sln` в виде `REM`-строк между заголовком
+файла и первой секцией `Project(...)`. Это синтаксис cmd/MSBuild, а не SLN: парсер
+Visual Studio такие строки вне Global-секций не понимает (риск "the solution file is
+malformed"). В v1.4.0.27 блок удалён из sln; конспект сохранён здесь:
 
 ```
-REM [DISABLED] Debug|ARM64 / Release|ARM64 — ARM64 НЕ поддерживается Windows 10 Mobile
-REM (builds 15254.603 / 15400.0). Целевые устройства (Lumia 950/950XL, Elite x3) — ARM32.
-REM Включать ARM64 можно только во вторичном десктопном sln (UWP PC), см. ниже.
+[DISABLED] Debug|ARM64 / Release|ARM64 — ARM64 НЕ поддерживается Windows 10 Mobile
+(builds 15254.603 / 15400.0). Целевые устройства (Lumia 950/950XL, Elite x3) — ARM32.
+Включать ARM64 можно только во вторичном десктопном sln (UWP PC), см. ниже.
 ```
 
 Аналогично `x64` отсутствует — он нужен только десктопной редакции UWP, а не мобильной.
@@ -86,11 +89,11 @@ REM Включать ARM64 можно только во вторичном де�
 ```bat
 copy Barometer_UWP.sln Barometer_UWP.Desktop.sln
 :: затем в Desktop-sln добавьте конфигурации x64|ARM64 и в csproj переопределите
-:: <TargetDeviceFamily Name="Windows.Universal" .../> (уже подходит) и
-:: удалите комментарий REM о ARM64. Мобильный sln остаётся нетронутым.
+:: <TargetDeviceFamily Name="Windows.Universal" .../> (уже подходит).
+:: Мобильный sln остаётся нетронутым.
 ```
 
-В текущем мобильном sln эти строки законспектированы и не участвуют в сборке —
+В текущем мобильном sln конфигураций ARM64/x64 нет вовсе —
 так требуемо: «Windows.Mobile, arm32 first, x86 строго опционально».
 
 ## 4. Сборка
@@ -103,7 +106,7 @@ msbuild Barometer_UWP.sln /p:Configuration=Release /p:Platform=ARM /p:AppxBundle
 msbuild Barometer_UWP.sln /p:Configuration=Debug /p:Platform=x86
 ```
 
-Выход: `Barometer_UWP/bin/ARM/Release/AppxPackages/Barometer_UWP_1.4.0.26_arm.appxbundle`.
+Выход: `Barometer_UWP/bin/ARM/Release/AppxPackages/Barometer_UWP_1.4.0.27_arm.appxbundle`.
 
 ## 5. Что уже проверено статически (почему код считается стабильным)
 

@@ -1,11 +1,29 @@
+# Barometer UWP — Changelog
+
+## v1.4.0.27-stable — XAML Spacing (16299+) и чистка sln (2026-10-25)
+
+### StackPanel.Spacing — API доступен только с Windows 10 16299+
+Проект таргетит 15063/15254 (Windows 10 Mobile), поэтому `StackPanel.Spacing` недопустим
+(WMC/XAML compile error на целевой платформе). Исправлено 8 использований (8 Soacing'ов):
+- `Views/ChartMiniTile.xaml` — Spacing="6" убран, отступ перенесён на дочерний TextBlock (`Margin="6,0,0,5"`).
+- `Views/GraphicsPage.xaml` — Spacing="12" убран, отступ на первом дочернем TextBlock (`Margin="0,0,12,0"`).
+- `Views/SettingsPage.xaml` — 6× Spacing="10" убраны; там где у детей уже был `Margin="0,0,10,0"` (кнопки) — ничего не добавлялось; чекбоксам LocalBackup/OneDriveBackup добавлен `Margin="0,0,10,0"`. В местах удалений оставлены комментарии-предупреждения про 16299+.
+Все XAML проходят XML-парсер; в продакшн-коде Spacing не осталось.
+
+### Barometer_UWP.sln
+- Удалён блок `REM ...` между заголовком файла и первой секцией `Project(...)`: это cmd-синтаксис,
+  просар SLN-парсер VS не понимает такие строки вне Global-секций (риск "solution file is malformed").
+  Конспект про ARM32-first/x86/ARM64-x64 полностью сохранён в BUILD_VS2017.md (раздел 3).
+- Перевод в CRLF + таб-индентация: формат, ожидаемый Visual Studio 2017 (файл был LF-only).
+- Проверено: GUID проекта `{C8D8B5A6-...}` == ProjectGuid в csproj; 4 конфигурации Debug|ARM, Debug|x86, Release|ARM, Release|x86.
+- Версии синхронизированы: 1.4.0.27 (appxmanifest, AssemblyInfo).
+
 ## v1.4.0.26-stable — Релизная ветка для VS2017 (2026-10-24)
 
 - Стабильная ветка `releases/stable`: код статически верифицирован Roslyn-харнессом (0 ошибок компиляции C#).
 - sln: ARM32-first, x86 опционально (эмулятор 15254.1); ARM64/x64 законспектированы как unsupported на Windows 10 Mobile.
 - Добавлены BUILD_VS2017.md (полный гайд: SDK 15254, packages.config restore, тестовый сертификат Signing) и install_deps.cmd.
 - Версии манифеста/сборки синхронизированы: 1.4.0.26.
-
-# Barometer UWP — Changelog
 
 ## v1.4.0.3 — Исправления карты неба / авто-темы (2026-09-30)
 

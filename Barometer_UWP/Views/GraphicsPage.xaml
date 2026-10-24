@@ -40,8 +40,9 @@
         </Grid>
 
         <!-- Axis info + min/max -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12" Margin="8,0">
-            <TextBlock Text="{x:Bind ViewModel.AxisInfoText, Mode=OneWay}" FontSize="13" VerticalAlignment="Center"/>
+        <!-- StackPanel.Spacing requires Windows 10 16299+; replaced with per-child margins (15063/15254 target) -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="8,0">
+            <TextBlock Text="{x:Bind ViewModel.AxisInfoText, Mode=OneWay}" FontSize="13" VerticalAlignment="Center" Margin="0,0,12,0"/>
             <TextBlock Text="{x:Bind ViewModel.RangeInfoText, Mode=OneWay}" FontSize="13" VerticalAlignment="Center"/>
         </StackPanel>
 

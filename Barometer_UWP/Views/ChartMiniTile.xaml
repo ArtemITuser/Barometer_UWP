@@ -12,10 +12,11 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-        <StackPanel Orientation="Horizontal" Grid.Row="0" Spacing="6">
+        <!-- StackPanel.Spacing requires Windows 10 16299+; this app targets 15063/15254 (Win10 Mobile) -->
+        <StackPanel Orientation="Horizontal" Grid.Row="0">
             <TextBlock x:Name="ValueText" Text="--" FontSize="24" FontWeight="SemiBold"/>
             <TextBlock x:Name="UnitText" Text="мм рт. ст." FontSize="14" VerticalAlignment="Bottom"
-                       Margin="0,0,0,5" Opacity="0.7"/>
+                       Margin="6,0,0,5" Opacity="0.7"/>
         </StackPanel>
         <Canvas x:Name="ChartCanvas" Grid.Row="1" SizeChanged="ChartCanvas_SizeChanged"/>
     </Grid>
