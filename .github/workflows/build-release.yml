@@ -232,21 +232,27 @@ jobs:
           # NOT, and our previous props carried zero items (v22 theory was wrong). Inject real
           # Reference items with netcore50 facade HintPaths (ref assemblies, type-forwarded —
           # never lib/netstandard impl copies, that caused the CS0012 mscorlib cascade in v16b).
+          # v1.4.0.27b FIX: enumerate packages.config directly (the previous loop iterated an
+          # undefined $seen table -> PowerShell ParserError killed this step before msbuild ran).
+          # Escaping note: YAML block scalar passes text through verbatim, so inside a PS
+          # double-quoted string the XML quotes must be written as `" (backtick), NOT \".
+          $pcPath = Join-Path $projDir "packages.config"
+          [xml]$pcDoc = Get-Content $pcPath
           $refs = New-Object System.Collections.Generic.List[string]
-          foreach ($e in $seen.Values) {
-            $id = $e.Id; $ver = $e.Ver
+          foreach ($p in $pcDoc.packages.package) {
+            $id = $p.id; $ver = $p.version
             if ($id -notmatch '^(system|microsoft\.netcore)\.' -and $id -ne 'Newtonsoft.Json') { continue }
             $base = Join-Path $pkgRoot ("$id.$ver")
-            if (-not (Test-Path $base)) { continue }
+            if (-not (Test-Path $base)) { Write-Host ("  skip (not restored): $id $ver"); continue }
             $dll = @()
             foreach ($pat in @('ref\netcore50','ref\netstandard1.3','ref\netstandard1.0','lib\uap10.0','lib\netcore50')) {
               $c = Get-ChildItem (Join-Path $base $pat) -Filter '*.dll' -EA SilentlyContinue | Select-Object -First 1
               if ($c) { $dll = @($c); break }
             }
-            if (-not $dll) { continue }
+            if (-not $dll) { Write-Host ("  skip (no ref dll): $id $ver"); continue }
             $asm = [IO.Path]::GetFileNameWithoutExtension($dll[0].Name)
-            $hp = $dll[0].FullName.Replace('','\\')
-            $refs.Add("    <Reference Include=\"$asm\"><HintPath>$hp</HintPath><Private>False</Private></Reference>")
+            $hp = $dll[0].FullName.Replace('\','\\')
+            $refs.Add('    <Reference Include="' + $asm + '"><HintPath>' + $hp + '</HintPath><Private>False</Private></Reference>')
           }
           Write-Host ("injected facade references: " + $refs.Count)
           # Build the props file line-by-line to avoid here-string/YAML indentation pitfalls.
