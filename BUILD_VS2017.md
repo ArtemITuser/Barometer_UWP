@@ -49,10 +49,13 @@ nuget restore Barometer_UWP.sln
 корректные SDK reference assemblies → WMC1006/WMC9999 «Cannot resolve System.Runtime.dll».
 Все BCL/WinRT ссылки классический UAP-проектный система берёт сама из Windows SDK
 (UnionMetadata + ReferenceAssemblies); runtime-IL .NET Core берётся из установленного в
-машине VC++ 2015-2019 UWP Desktop Runtime (ставится с VS2017). csproj дополнительно
-содержит целевой таргет `StripPackageFacadeShadows`, который вычищает любые facade-тени
-из `packages\` из списка ссылок компилятора — защита от повторного появления метапакета
-(например, из старого кэша `packages\`). При открытии в VS:
+машине VC++ 2015-2019 UWP Desktop Runtime (ставится с VS2017). Таргет
+`StripPackageFacadeShadows`, добавлявшийся в v1.4.0.32 для дополнительной чистки, УДАЛЁН в
+v1.4.0.33: его Condition содержал item-batching @(PackageConflictFacadeNames), что запрещено
+синтаксисом MSBuild (MSB4092 — проект не загружался в IDE), и к тому же он был no-op'ом.
+Единственная защита от facade-теней — отсутствие метапакета в packages.config; поэтому если
+на машине осталась старая папка `packages\microsoft.netcore.universalwindowsplatform` от
+прежних restore, УДАЛИТЕ всю папку `packages\` перед сборкой v1.4.0.33. При открытии в VS:
 **Tools → NuGet Package Manager → Enable project restore** должен быть включён.
 
 ## 2. Подпись пакета (важно после клонирования!)

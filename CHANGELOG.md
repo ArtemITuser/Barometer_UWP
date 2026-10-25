@@ -1,5 +1,31 @@
 # Barometer UWP — Changelog
 
+## v1.4.0.33-stable — Исправлена ошибка загрузки проекта MSB4092 (2026-10-26)
+
+### Диагноз (сообщение пользователя из VS2017, zip v1.4.0.32)
+- Ошибка MSB4092 на строке 269 csproj: «неожиданный маркер %(Reference.HintPath)» — проект
+  не загружался в IDE (IDE0006). Причина: в таргете StripPackageFacadeShadows (добавлен в
+  v1.4.0.32 как страховка) условие таргета содержало item-batching выражение
+  @(PackageConflictFacadeNames), а условия на уровне таргетов/свойств в MSBuild не могут
+  батчинг использовать — только свойства и функции Exists()/ValueOrDefault() и т.п.
+
+### Исправления
+- Таргет StripPackageFacadeShadows и список PackageConflictFacadeNames ПОЛНОСТЬЮ УДАЛЕНЫ из csproj.
+  Разбор показал, что он был бесполезен даже без синтаксической ошибки: удаление элементов
+  Reference ПОСЛЕ ResolveAssemblyReferences не влияет на уже сформированный ReferencePath,
+  который потребляют XamlCompiler/csc. Реальный фикс WMC1006/WMC9999 — удаление метапакета
+  Microsoft.NETCore.UniversalWindowsPlatform из packages.config (v1.4.0.32); он остался в силе.
+- Обновлены комментарии в csproj; добавлено явное предупреждение: если на машине осталась
+  старая папка packages\microsoft.netcore.universalwindowsplatform от предыдущих restore —
+  удалить всю папку packages перед сборкой.
+- Версии синхронизированы: Package.appxmanifest / AssemblyInfo = 1.4.0.33.
+
+### Статическая приёмка (сборка по требованию не выполняется)
+- Все 10 XML-файлов парсятся; в csproj не осталось ни одного условия с batching-маркерами
+  (@( / %( внутри Condition=) — проверено сканером; структура таргетов валидна.
+- packages.config: newtonsoft.json 12.0.3, documentformat.openxml 2.9.1,
+  microsoft.net.native.compiler 1.7.3 (без метапакета).
+
 ## v1.4.0.32-stable — Устранена тень метапакета: исправлены WMC1006/WMC9999 System.Runtime (2026-10-26)
 
 ### Диагноз (сообщение пользователя из VS2017, сборка Debug|ARM из zip v1.4.0.31)
