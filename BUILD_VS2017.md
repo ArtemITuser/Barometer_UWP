@@ -39,11 +39,20 @@ nuget restore Barometer_UWP.sln
 2. Tools → NuGet Package Manager → Package Manager Console: `nuget restore Barometer_UWP.sln`.
 3. Скачайте nuget.exe (https://dist.nuget.org/win-x86-commandline/latest/nuget.exe) в папку
    `.nuget\` рядом с решением — csproj подхватит его автоматически.
-После успешного restore все 20 диагностик исчезают (появится папка `packages\` с ~90 пакетами).
+После успешного restore все диагностики MSB3245 исчезают (появится папка `packages\`
+с Newtonsoft.Json, DocumentFormat.OpenXml и .NET Native compiler).
 
-Проект использует **packages.config** (классический стиль), а НЕ PackageReference —
-это принципиально для UAP-проектов на VS2017: только так подключаются WinRT-проекции
-метапакета `Microsoft.NETCore.UniversalWindowsPlatform 6.0.8`. При открытии в VS:
+Проект использует **packages.config** (классический стиль), а НЕ PackageReference.
+ВАЖНО (v1.4.0.32): метапакет `Microsoft.NETCore.UniversalWindowsPlatform` из packages.config
+УДАЛЁН намеренно — его netcore50 facade DLL (`System.Runtime, Version=4.0.0.0`) из папки
+`packages\` перехватывались simple-name разрешением MSBuild/XamlCompiler и затеняли
+корректные SDK reference assemblies → WMC1006/WMC9999 «Cannot resolve System.Runtime.dll».
+Все BCL/WinRT ссылки классический UAP-проектный система берёт сама из Windows SDK
+(UnionMetadata + ReferenceAssemblies); runtime-IL .NET Core берётся из установленного в
+машине VC++ 2015-2019 UWP Desktop Runtime (ставится с VS2017). csproj дополнительно
+содержит целевой таргет `StripPackageFacadeShadows`, который вычищает любые facade-тени
+из `packages\` из списка ссылок компилятора — защита от повторного появления метапакета
+(например, из старого кэша `packages\`). При открытии в VS:
 **Tools → NuGet Package Manager → Enable project restore** должен быть включён.
 
 ## 2. Подпись пакета (важно после клонирования!)
@@ -126,8 +135,8 @@ msbuild Barometer_UWP.sln /p:Configuration=Debug /p:Platform=x86
   приложения без ошибок (последний прогон: 0 errors, только CS1998 warnings).
 * Все Compile/Page/PRIResource/Content-записи csproj соответствуют файлам в дереве.
 * XML csproj/sln/appxmanifest/packages.config проходят парсер; GUID sln == csproj.
-* packages.config включает полный closure transitive-зависимостей метпака UWP 6.0.8 —
-  `nuget restore` одного уровня достаточно (без PackageReference-довольствий).
+* packages.config (v1.4.0.32): только сторонние либы + .NET Native compiler; метапакет
+  UWP удалён (см. раздел 1) — facade-тени больше не могут затенить SDK System.Runtime.
 * CI GitHub Actions больше не является источником истины для мобильного билда
   (legacy-UWP unsupported на современных runner'ах); для автосборки используйте
   self-hosted runner с VS2017 + SDK 15254 (workflow `build-release.yml` совместим).
