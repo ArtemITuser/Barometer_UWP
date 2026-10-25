@@ -1,5 +1,38 @@
 # Barometer UWP — Changelog
 
+## v1.4.0.29-stable — Финальный валидный релиз кода; GitHub Actions отключён (2026-10-26)
+
+### Статус CI
+- **GitHub Actions для репозитория отключён** (UWP-тулчейн официально deprecated на hosted
+  runners windows-2022, стабильная сборка классического packages.config UAP csproj там невозможна).
+  Релиз собирается вручную в Visual Studio 2017/2019 по инструкции BUILD_VS2017.md
+  (SDK 15063/15254, Release|ARM для Lumia 950/950XL и HP Elite x3).
+- Файл workflow `.github/workflows/build-release.yml` сохранён как архивная справка по
+  корректной обвязке packages.config-restore (nuget.g.props + netcore50 facade references);
+  триггеры больше не срабатывают — Actions выключен на уровне настроек репозитория.
+
+### Версии платформ — приведены к 15063
+- `Barometer_UWP.csproj`: TargetPlatformVersion = **10.0.15063.0**, TargetPlatformMinVersion = 10.0.15063.0.
+- `Package.appxmanifest`: MinVersion = 10.0.15063.0, MaxVersionTested = **10.0.15063.0**.
+- Для сборки на машине без SDK 15063 достаточно заменить номер платформы в VS (Properties →
+  Packaging) или флаг `/p:TargetPlatformVersion=10.0.15254.0` — обратная совместимость гарантирована min 15063.
+
+### project.json ("could not be found") — исправлен корень
+- Ошибка NU1005 возникала из-за того, что CI-патч поднимал TargetPlatformMinVersion до самого
+  свежего SDK раннера, и NuGet-restore переходил на конвейер project.assets.json/project.json.
+- В репозитории **нет и никогда не было project.json / project.lock.json** (проверено по
+  `git ls-files`); в csproj зафиксированы `RestoreProjectStyle=packages.config` и
+  `PackageReferenceUpdateAutomaticAtRestoreTime=false` (v1.4.0.28) — конвейер JSON-restore
+  не задействуется никогда. В VS2017 при открытии решения использовать только nuget restore
+  для packages.config (команда «Восстановить пакеты NuGet» в Solution Explorer).
+
+### Статическая приёмка (вместо сборки, как запрошено)
+- Все XML-файлы (10 × .xaml/.csproj/.appxmanifest/.resw/packages.config) проходят парсер.
+- Реальных атрибутов StackPanel.Spacing (API 16299+) нет — только комментарии-предупреждения.
+- sln: Format 12.00, CRLF/tab, GUID проекта совпадает с csproj, 4 конфигурации ARM/x86.
+- Все 37 .cs и 5 .xaml объявлены в csproj; битых ссылок на отсутствующие файлы нет.
+- Версии синхронизированы: appxmanifest / AssemblyInfo = **1.4.0.29**.
+
 ## v1.4.0.28-stable — Исправления сборки CI: project.json, дубли Reference, версии 15063 (2026-10-25)
 
 ### Ошибка "project.json could not be found" (NU1005)

@@ -182,30 +182,69 @@ jobs:
           if (-not (Test-Path "packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8")) { Write-Host "::error::UAP metapackage missing"; exit 1 }
           Write-Host ("package count after full restore: " + (Get-ChildItem packages -Directory).Count)
 
-      - name: Generate minimal obj\\nuget.g.props (NuGet wiring only, zero Reference items)
+      - name: Generate obj\\nuget.g.props (NuGet wiring + netcore50 facade references)
         shell: powershell
         run: |
           # Classic packages.config projects rely on VS writing obj\<proj>.nuget.g.props into the
           # csproj's obj folder; nuget.exe CLI restore does NOT do this for a bare packages.config
           # invocation. Without those imports the restored UWP metapackage is invisible to
-          # XamlCompiler/CSC -> WMC1006 + CS2001 cascade. Emulate a MINIMAL props file:
-          # NuGet wiring properties only, NO <Reference> items.
-          # v1.4.0.27c FIX (duplicate-reference cascade): the previous version injected one
-          # <Reference> per packages.config entry with absolute HintPaths. The csproj already
-          # carries explicit References for Newtonsoft.Json, DocumentFormat.OpenXml,
-          # System.Runtime.WindowsRuntime.UI.Xaml and System.ObjectModel with RELATIVE HintPaths
-          # pointing at the same files -> MSBuild assigns the same target filename to two
-          # different source assemblies -> "The 'Reference' declarations... conflict" errors,
-          # plus netstandard1.x implementation facades (ref\netstandard1.3 fallback pattern)
-          # re-introduced the CS0012 mscorlib duplicate-System.Object universe from v1.4.0.16b.
-          # The compile universe stays owned exclusively by the csproj (SDK winmd set via
-          # Microsoft.Windows.UI.Xaml.CSharp.targets + the guarded netcore50 facade ItemGroup).
+          # XamlCompiler/CSC -> WMC1006 + CS2001 cascade. Emulate them manually against the
+          # restored packages folder.
+          # v1.4.0.28b FIX (WMC1006 'Type universe cannot resolve assembly: System.Runtime,
+          # Version=4.0.0.0'): the previous version carried ZERO <Reference> items and the
+          # guarded fallback ItemGroup in the csproj never fired on CI (obj\*.nuget.g.props
+          # exists there). XamlCompiler resolves that simple identity ONLY from an explicit
+          # managed Reference -- the SDK winmd/contract set (References\10.0.26100.0\... +
+          # UnionMetadata\Facade\Windows.winmd) does not provide it. Re-inject the facade
+          # references, but STRICTLY netcore50 ref assemblies only (type-forwarded; never
+          # lib\ or ref\netstandard1.x implementation copies -> no CS0012 duplicate
+          # System.Object universe from v1.4.0.16b) and NEVER for ids already referenced by
+          # the csproj itself (Newtonsoft.Json, DocumentFormat.OpenXml, System.ObjectModel,
+          # System.Runtime.WindowsRuntime.UI.Xaml -> no MSBuild duplicate-output conflicts).
           $ErrorActionPreference = "Stop"
           $projDir = "Barometer_UWP"
           $objDir  = Join-Path $projDir "obj"
           New-Item -ItemType Directory -Force -Path $objDir | Out-Null
           $pkgRoot = Join-Path (Get-Location).Path "packages"
           $solRoot = (Get-Location).Path
+          # Ids with explicit csproj <Reference>+HintPath entries - must not be duplicated here.
+          $csprojOwned = @('newtonsoft.json','documentformat.openxml','system.objectmodel','system.runtime.windowsruntime.ui.xaml')
+          # v1.4.0.28b: compute csproj-owned ids dynamically from its <Reference><HintPath> items
+          # (packages\<id>.<ver> pattern) so nothing can slip through a stale hardcoded list.
+          [xml]$csDoc = Get-Content (Join-Path $projDir "Barometer_UWP.csproj")
+          foreach ($igx in $csDoc.Project.ItemGroup) {
+            foreach ($rx in @($igx.Reference)) {
+              if (-not $rx.HintPath) { continue }
+              $m = [regex]::Match($rx.HintPath, 'packages\\(?<id>[^\\.]+)\.(?<ver>[0-9][^\\]*)\\')
+              if ($m.Success) { $csprojOwned += $m.Groups['id'].Value.ToLowerInvariant() }
+            }
+          }
+          $csprojOwned = @($csprojOwned | Select-Object -Unique)
+          [xml]$pcDoc = Get-Content (Join-Path $projDir "packages.config")
+          $refs = New-Object System.Collections.Generic.List[string]
+          foreach ($p in $pcDoc.packages.package) {
+            $id = $p.id.ToLowerInvariant(); $ver = $p.version
+            if ($csprojOwned -contains $id) { continue }
+            if ($id -notmatch '^(system\.|microsoft\.netcore\.)') { continue }
+            $base = Join-Path $pkgRoot ($p.id + '.' + $ver)
+            # Assembly name must be taken from the file actually on disk: packages.config ids are
+            # normalized lowercase but real names keep internal capitals (System.Globalization.Extensions,
+            # System.Private.Uri, ...). Manual capitalization would produce non-existent filenames.
+            $refDir = Join-Path $base 'ref\netcore50'
+            if (-not (Test-Path $refDir)) { continue }
+            $cand = @(Get-ChildItem $refDir -Filter '*.dll' -EA SilentlyContinue)
+            if ($cand.Count -eq 0) { continue }
+            $dllPath = $cand[0].FullName
+            $asmName = [IO.Path]::GetFileNameWithoutExtension($cand[0].Name)
+            $hp = $dllPath.Replace('\','\\')
+            $refs.Add('    <Reference Include="' + $asmName + '"><HintPath>' + $hp + '</HintPath><Private>False</Private></Reference>')
+          }
+          Write-Host ("injected netcore50 facade references: " + $refs.Count)
+          if ($refs.Count -lt 5) { Write-Host "::error::facade injection empty - check restore step"; exit 1 }
+          # Microsoft.NETCore.UniversalWindowsPlatform metapackage ships its own build transitive
+          # props/targets under build\uap10.0\ - import them explicitly (what VS NuGet targets do).
+          $metaProps = Join-Path $pkgRoot "Microsoft.NETCore.UniversalWindowsPlatform.6.0.8\build\uap10.0\Microsoft.NETCore.UWP.props"
+          $metaTargets = Join-Path $pkgRoot "Microsoft.NETCore.UniversalWindowsPlatform.6.0.8\build\uap10.0\Microsoft.NETCore.UWP.targets"
           $lines = @(
             '<?xml version="1.0" encoding="utf-8"?>',
             '<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">',
@@ -215,15 +254,29 @@ jobs:
             '    <PackagesConfig>true</PackagesConfig>',
             "    <PackagesDir>$pkgRoot\</PackagesDir>",
             '  </PropertyGroup>',
-            '</Project>'
+            '  <ItemGroup>'
+          ) + $refs + @(
+            '  </ItemGroup>'
           )
+          if (Test-Path $metaProps) {
+            $lines += ('  <Import Project="' + $metaProps.Replace('\','\\') + '" Condition="Exists(''' + $metaProps.Replace('\','\\') + ''')" />')
+            Write-Host "metapackage build props found"
+          } else {
+            Write-Host "::warning::metapackage build\\uap10.0 props absent"
+            Get-ChildItem (Join-Path $pkgRoot "Microsoft.NETCore.UniversalWindowsPlatform.6.0.8\build") -Recurse -EA SilentlyContinue | ForEach-Object { Write-Host ("  build tree: " + $_.FullName) }
+          }
+          $lines += '</Project>'
           Set-Content (Join-Path $objDir "Barometer_UWP.nuget.g.props") $lines -Encoding UTF8
-          Set-Content (Join-Path $objDir "Barometer_UWP.nuget.g.targets") @(
+          $tlines = @(
             '<?xml version="1.0" encoding="utf-8"?>',
-            '<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">',
-            '</Project>'
-          ) -Encoding UTF8
-          Get-Content (Join-Path $objDir "Barometer_UWP.nuget.g.props")
+            '<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">'
+          )
+          if (Test-Path $metaTargets) {
+            $tlines += ('  <Import Project="' + $metaTargets.Replace('\','\\') + '" Condition="Exists(''' + $metaTargets.Replace('\','\\') + ''')" />')
+          }
+          $tlines += '</Project>'
+          Set-Content (Join-Path $objDir "Barometer_UWP.nuget.g.targets") $tlines -Encoding UTF8
+          Get-Content (Join-Path $objDir "Barometer_UWP.nuget.g.props") | Select-String 'Reference Include|Import Project' | ForEach-Object { $_.Line.Trim().Substring(0,[Math]::Min(120,$_.Line.Trim().Length)) }
 
       - name: Build Release|ARM (ARM32, Lumia 950 / Elite x3)
         # v1.4.0.25 FIX: use %GITHUB_ENV% live value (set mid-job by the pin step).
