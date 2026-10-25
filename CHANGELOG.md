@@ -1,5 +1,46 @@
 # Barometer UWP — Changelog
 
+## v1.4.0.32-stable — Устранена тень метапакета: исправлены WMC1006/WMC9999 System.Runtime (2026-10-26)
+
+### Диагноз (сообщение пользователя из VS2017, сборка Debug|ARM из zip v1.4.0.31)
+- 2 ошибки: XamlCompiler WMC1006 «Cannot resolve Assembly or Windows Metadata file
+  'System.Runtime.dll'» + WMC9999 «Type universe cannot resolve assembly: System.Runtime,
+  Version=4.0.0.0». То есть файл на диске ЕСТЬ (иначе была бы ошибка «not found»), но в
+  список ссылок компилятора попадает не та копия.
+
+### Корень причины
+`microsoft.netcore.universalwindowsplatform 6.0.8` в packages.config: после restore в
+`..\packages\...netcore50\System.Runtime.dll` лежит facade-сборка с тем же простым именем
+и версией 4.0.0.0, что и SDK reference assembly. Simple-name разрешение MSBuild и
+XamlCompiler type-universe перехватывает её вместо `...\Windows Kits\10\References\...\
+System.Runtime.dll`, вселенная типов ломается (facade forwardит к mscorlib, которого в
+списке нет). Это же объясняет одиночное предупреждение MSB3245 по `System.Private.Uri`.
+Все предыдущие попытки (v1.4.0.28–31) лечили симптомы, не убирая источник тени.
+
+### Исправление
+- packages.config: удалён метапакет UWP 6.0.8. Классическая UAP-система проектов сама
+  подключает ВСЕ BCL/WinRT ссылки из Windows SDK (UnionMetadata + ReferenceAssemblies);
+  runtime .NET Core IL берётся из машинного VC++ 2015-2019 UWP Desktop Runtime (ставится
+  с VS2017). В packages.config остаются только Newtonsoft.Json 12.0.3,
+  DocumentFormat.OpenXml 2.9.1, Microsoft.NET.Native.Compiler 1.7.3.
+- csproj: новый таргет `StripPackageFacadeShadows` (AfterTargets=ResolveAssemblyReferences)
+  вырезает из ReferencePath любые facade-сборки (System.Runtime, mscorlib, System.Linq,
+  System.ObjectModel, System.Private.Uri, System.Runtime.WindowsRuntime* и др.), приехавшие
+  из папки `packages\` — защита от старых кэшей packages\ на машине пользователя.
+  EnsurePackagesRestored теперь проверяет наличие newtonsoft.json.12.0.3 (метапакет больше
+  не ориентир). Восстановлен удалённый по ошибке <UsingTask> для NuGetTasks-restore.
+- TileService.cs: CS0122 — закрытый WinRT-проецируемый тип IXmlNodeList заменён на
+  публичный Windows.Data.Xml.Dom.XmlNodeList в сигнатуре Push() (то же самое поведение,
+  GetElementsByTagName возвращает совместимый тип).
+- BUILD_VS2017.md / install_deps.cmd приведены в соответствие (без ~90 пакетов closure).
+- Версии синхронизированы: manifest/AssemblyInfo = 1.4.0.32.
+
+### Инструкция для пользователя (обязательно!)
+1. Удалите папку `packages\` рядом с решением (в ней лежит теневой метапакет из прошлого
+   restore) и `obj\`, `bin\` в Barometer_UWP.
+2. Распакуйте новый zip v1.4.0.32, выполните install_deps.cmd (или nuget restore), откройте
+   sln, Rebuild Solution.
+
 ## v1.4.0.31-stable — Откат facade-ссылок: исправлены 81 ошибка CS0012/CS0234 после перестройки (2026-10-26)
 
 ### Диагноз (сообщение пользователя из VS2017, сборка из zip релиза v1.4.0.30)

@@ -130,7 +130,10 @@ namespace Barometer_UWP.Services
         private static XmlDocument Template(TileTemplateType t) =>
             TileUpdateManager.GetTemplateContent(t);
 
-        private static void Push(XmlDocument doc, Action<XmlDocument, IXmlNodeList> fill)
+        // v1.4.0.32: IXmlNodeList is an internal WinRT projection type (CS0122 "unavailable
+        // due to protection level") — GetElementsByTagName returns it dynamically fine, but
+        // it cannot be named in signatures. Use the public Windows.Data.Xml.Dom.XmlNodeList.
+        private static void Push(XmlDocument doc, Action<XmlDocument, XmlNodeList> fill)
         {
             var text = doc.GetElementsByTagName("text");
             fill(doc, text);

@@ -223,11 +223,59 @@
   <PropertyGroup>
     <_NuGetExe Condition="'$(_NuGetExe)'=='' And Exists('$(MSBuildThisFileDirectory)..\.nuget\nuget.exe')">$(MSBuildThisFileDirectory)..\.nuget\nuget.exe</_NuGetExe>
     <_NuGetTasksAssembly>$([MSBuild]::ValueOrDefault('$(VsInstallRoot)','C:\Program Files (x86)\Microsoft Visual Studio'))\MSBuild\Microsoft\nuget10\NuGetTasks.dll</_NuGetTasksAssembly>
+    <!-- v1.4.0.32: WMC9999 "Type universe cannot resolve assembly: System.Runtime,
+         Version=4.0.0.0" postmortem. The XamlCompiler type universe resolves the simple
+         name System.Runtime from the RAR output list; if a netcore50 facade DLL from
+         packages\microsoft.netcore.universalwindowsplatform wins that resolution while
+         its satellite facades are absent from the list, the universe breaks even though
+         the file exists on disk. A correct UAP compile must see ONLY the SDK reference
+         assemblies for BCL names. This property removes every non-SDK assembly whose
+         simple name is a BCL facade from the compiler/XamlCompiler reference sets
+         (belt-and-braces alongside dropping the metapackage from packages.config). -->
+    <ResolveAssemblyWarnOrErrorOnTargetArchitectureOfPlatformItem>false</ResolveAssemblyWarnOrErrorOnTargetArchitectureOfPlatformItem>
   </PropertyGroup>
+  <!-- NuGetTasks self-heal restore (used by EnsurePackagesRestored below) is only wired
+       when the VS-bundled assembly actually exists; on machines without it, nuget.exe at
+       ..\.nuget\nuget.exe or a manual restore is used instead. -->
   <UsingTask TaskName="NuGetRestoreTask" AssemblyFile="$(_NuGetTasksAssembly)" Condition="!Exists('$(_NuGetExe)') And Exists('$(_NuGetTasksAssembly)')" />
+  <ItemGroup>
+    <!-- Runs after ResolveAssemblyReferences so we can sanitize the resolved list before
+         GenerateTemporaryTargetAssembly / XamlCompiler and csc consume it. -->
+    <PackageConflictFacadeNames Include="System.Runtime"/>
+    <PackageConflictFacadeNames Include="mscorlib"/>
+    <PackageConflictFacadeNames Include="System.Core"/>
+    <PackageConflictFacadeNames Include="System.Private.Uri"/>
+    <PackageConflictFacadeNames Include="System.ObjectModel"/>
+    <PackageConflictFacadeNames Include="System.Linq"/>
+    <PackageConflictFacadeNames Include="System.Linq.Expressions"/>
+    <PackageConflictFacadeNames Include="System.Collections"/>
+    <PackageConflictFacadeNames Include="System.Collections.Concurrent"/>
+    <PackageConflictFacadeNames Include="System.Threading"/>
+    <PackageConflictFacadeNames Include="System.Threading.Tasks"/>
+    <PackageConflictFacadeNames Include="System.IO"/>
+    <PackageConflictFacadeNames Include="System.Resources.ResourceManager"/>
+    <PackageConflictFacadeNames Include="System.Globalization"/>
+    <PackageConflictFacadeNames Include="System.Diagnostics.Debug"/>
+    <PackageConflictFacadeNames Include="System.Net.Http"/>
+    <PackageConflictFacadeNames Include="System.Runtime.Extensions"/>
+    <PackageConflictFacadeNames Include="System.Runtime.WindowsRuntime"/>
+    <PackageConflictFacadeNames Include="System.Runtime.WindowsRuntime.UI.Xaml"/>
+    <PackageConflictFacadeNames Include="System.Runtime.InteropServices.WindowsRuntime"/>
+    <PackageConflictFacadeNames Include="System.Numerics.Vectors"/>
+    <PackageConflictFacadeNames Include="System.Xml.ReaderWriter"/>
+  </ItemGroup>
+  <Target Name="StripPackageFacadeShadows" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Remove="@(Reference)" Condition="'@(PackageConflictFacadeNames)'=='%(Reference.FileName)' And '%(Reference.HintPath)' != '' And '$([System.String]::Copy('%(Reference.HintPath)').Replace('\','/').ToLower().Contains('/packages/'))' == 'true'"/>
+      <_ResolvedFileToPutInLocalRemovedByFacadeStrip Include="@(_ResolvedFileToPutInLocal)" Condition="'@(PackageConflictFacadeNames)'=='%(_ResolvedFileToPutInLocal.FileName)'"/>
+      <_ResolvedMatchedByFacadeStrip Include="@(ReferencePath)" Condition="'@(PackageConflictFacadeNames)'=='%(ReferencePath.FileName)' And '%(ReferencePath.HintPath)' != '' And '$([System.String]::Copy('%(ReferencePath.HintPath)').Replace('\','/').ToLower().Contains('/packages/'))' == 'true'"/>
+      <ReferencePath Remove="@(_ResolvedMatchedByFacadeStrip)"/>
+    </ItemGroup>
+    <Message Importance="high" Text="FacadeShadowStrip: removed %(_ResolvedMatchedByFacadeStrip.Identity)" Condition="'@(_ResolvedMatchedByFacadeStrip)' != ''"/>
+  </Target>
   <Target Name="EnsurePackagesRestored" BeforeTargets="ResolveAssemblyReferences;ResolveWinMDReferences">
     <PropertyGroup>
-      <_PkgDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\packages\microsoft.netcore.universalwindowsplatform.6.0.8'))</_PkgDir>
+      <_PkgDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\packages\newtonsoft.json.12.0.3'))</_PkgDir>
     </PropertyGroup>
     <Message Importance="high" Text="packages folder missing/incomplete - running nuget restore (one-time, ~1 min)..." Condition="!Exists('$(_PkgDir)')" />
     <Exec Command="&quot;$(_NuGetExe)&quot; restore &quot;$(MSBuildThisFileDirectory)..\Barometer_UWP.sln&quot;"
