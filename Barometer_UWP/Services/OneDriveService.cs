@@ -5,8 +5,6 @@ using System.Threading.Tasks;
 using Windows.Storage.Streams;
 using Windows.Web.Http;
 using Windows.Web.Http.Headers;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace Barometer_UWP.Services
 {
@@ -99,22 +97,22 @@ namespace Barometer_UWP.Services
                     while (!string.IsNullOrEmpty(next))
                     {
                         var resp = await http.GetStringAsync(new Uri(next));
-                        var page = JObject.Parse(resp);
-                        foreach (var item in page["value"] ?? new JArray())
+                        // v1.4.0.34: vendored parser replaces Newtonsoft.Json.Linq (see Helpers\JsonSerializer.cs)
+                        string nl;
+                        foreach (var item in Barometer_UWP.Helpers.Json.ParseOneDrivePage(resp, out nl))
                         {
-                            var name = item["name"]?.ToString();
+                            var name = item.Name;
                             if (string.IsNullOrEmpty(name)) continue;
                             if (!(name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ||
                                   name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))) continue;
-                            DateTime.TryParse(item["lastModifiedDateTime"]?.ToString(), out var modified);
                             result.Add(new CloudBackupInfo
                             {
                                 Name = name,
-                                SizeBytes = item["size"]?.Value<long>() ?? 0,
-                                LastModified = modified
+                                SizeBytes = item.SizeBytes,
+                                LastModified = item.LastModified
                             });
                         }
-                        next = page["@odata.nextLink"]?.ToString();
+                        next = nl;
                     }
                 }
             }

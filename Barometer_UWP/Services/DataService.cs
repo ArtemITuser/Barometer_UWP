@@ -6,7 +6,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Barometer_UWP.Helpers;
 using Barometer_UWP.Models;
-using Newtonsoft.Json;
 using Windows.Storage;
 
 namespace Barometer_UWP.Services
@@ -14,8 +13,10 @@ namespace Barometer_UWP.Services
     /// <summary>Backup file schema: records + metadata in one JSON document.</summary>
     public class BackupFile
     {
-        [JsonProperty("metadata")] public BackupMetadata Metadata { get; set; }
-        [JsonProperty("records")] public List<PressureRecord> Records { get; set; }
+        // v1.4.0.34: JsonProperty attributes dropped together with Newtonsoft.Json;
+        // property names already match the persisted JSON keys (see Helpers\Json.cs).
+        public BackupMetadata Metadata { get; set; }
+        public List<PressureRecord> Records { get; set; }
     }
 
     public class DataService
@@ -54,7 +55,7 @@ namespace Barometer_UWP.Services
                 var json = await FileIO.ReadTextAsync(_dataFile);
                 if (!string.IsNullOrEmpty(json))
                 {
-                    var loaded = JsonConvert.DeserializeObject<List<PressureRecord>>(json);
+                    var loaded = Json.ParseRecords(json);
                     if (loaded != null)
                     {
                         lock (_lock)
@@ -89,7 +90,7 @@ namespace Barometer_UWP.Services
                     }
                     snapshot = _records.ToList();
                 }
-                var json = JsonConvert.SerializeObject(snapshot, Formatting.None);
+                var json = Json.SerializeRecords(snapshot);
                 await FileIO.WriteTextAsync(_dataFile, json);
             }
             catch (Exception ex)
@@ -156,7 +157,7 @@ namespace Barometer_UWP.Services
                 Storage = "Local"
             };
             var doc = new BackupFile { Metadata = meta, Records = snapshot };
-            var json = JsonConvert.SerializeObject(doc, Formatting.None);
+            var json = Json.SerializeBackup(doc.Metadata, doc.Records);
 
             var folder = await ApplicationData.Current.LocalFolder.CreateFolderAsync(
                 "backups", CreationCollisionOption.OpenIfExists);
@@ -173,9 +174,9 @@ namespace Barometer_UWP.Services
             List<PressureRecord> records = null;
             try
             {
-                var doc = JsonConvert.DeserializeObject<BackupFile>(json);
+                var doc = Json.ParseBackup(json);
                 if (doc != null && doc.Records != null) records = doc.Records;
-                else records = JsonConvert.DeserializeObject<List<PressureRecord>>(json); // plain array fallback
+                else records = Json.ParseRecords(json); // plain array fallback
             }
             catch (Exception ex)
             {

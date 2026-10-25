@@ -1,3 +1,27 @@
+# Changelog
+
+## v1.4.0.34-stable — Окончательное исправление WMC1006/WMC9999 «System.Runtime» (нулевые NuGet-зависимости компиляции)
+- Postmortem v1.4.0.33 (чистое дерево, метапакета уже нет — ошибка осталась): ссылки на
+  Newtonsoft.Json 12.0.3 и DocumentFormat.OpenXml 2.9.1 разрешались в их `lib\netstandard1.3`
+  сборки; compile-time closure .NETStandard,v1.3 требует весь граф NETSTANDARD1.3 facade-пакетов
+  (System.Runtime ref и т.д.), отсутствующий в установке UAP 15063 SDK → XamlCompiler WMC1006 +
+  WMC9999 на первом же нерезолвленном facade. OpenXml 2.9.1 вообще не имеет netstandard2.0 asset
+  (проверено по nuget.org) — починить ссылку было нельзя.
+- Решение: обе библиотеки полностью исключены из сборки:
+  * Newtonsoft.Json → vendored Helpers\JsonSerializer.cs (zero-dependency JSON reader/writer:
+    PressureRecord/BackupFile/OAuth/GitHub-release схемы); добавлен в csproj Compile.
+  * DocumentFormat.OpenXml → ExcelHelper переписан на System.IO.Compression.ZipArchive
+    (OPC/xlsx вручную) — только Windows SDK.
+  * UpdateService: System.Net.Http → Windows.Web.Http (facade Net.Http тоже из netstandard-графа).
+  * ExportService: System.Net.WebUtility.HtmlEncode → локальный HtmlEncodeHelper.
+- packages.config: остался только microsoft.net.native.compiler 1.7.3 (ILCompiler для Release;
+  для компиляции не нужен). Таргет EnsurePackagesRestored превращён в no-op сообщение;
+  ручное `nuget restore` по-прежнему работает через nuget.g.props/.targets импорты.
+- Версии синхронизированы 1.4.0.34 (AssemblyInfo/appxmanifest). Статическая приёмка: XML OK,
+  все .cs/.xaml объявлены, HintPath-ссылок на пакеты 0, остатков System.Net.Http/WebUtility 0.
+- Требуется от пользователя: удалить старые obj/bin/packages и собрать из нового zip
+  (Debug|ARM или Release|ARM). Никакого restore перед сборкой не нужно.
+
 # Barometer UWP — Changelog
 
 ## v1.4.0.33-stable — Исправлена ошибка загрузки проекта MSB4092 (2026-10-26)

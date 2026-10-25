@@ -84,6 +84,7 @@
     <Compile Include="ServiceContainer.cs" />
     <Compile Include="Helpers\CsvHelper.cs" />
     <Compile Include="Helpers\ExcelHelper.cs" />
+    <Compile Include="Helpers\JsonSerializer.cs" />
     <Compile Include="Helpers\Logger.cs" />
     <Compile Include="Helpers\RelayCommand.cs" />
     <Compile Include="Helpers\UnitConverter.cs" />
@@ -160,40 +161,25 @@
     </Page>
   </ItemGroup>
   <ItemGroup>
-    <!-- Mobile-compatible package set (Win10 15063 ARM/ARM64): no OxyPlot.UWP,
-         no Microsoft.Graph 4.x / MSAL 4.x / Community Toolkit 7.x (unsupported).
-         packages.config style: required for classic UAP csproj on VS2017 and modern
-         MSBuild images (PackageReference in legacy project system does not wire the
-         UWP .NET Native toolchain -> WinRT projections missing at compile time).
-         NOTE: HintPaths must be absolute-safe: CI runners have a global Newtonsoft.Json
-         under Program Files that MSBuild's simple-name resolution can shadow relative
-         ..\packages paths with (wrong CLR flavor -> WMC1006 System.Runtime unresolved).
-         $(MSBuildThisFileDirectory) pins them to the restored packages folder. -->
-    <Reference Include="Newtonsoft.Json">
-      <!-- v1.4.0.13b: the folder 'portable-net45+win8' does not exist in 12.0.3 (real name is
-           portable-net45+win8+wp8+wpa81); netstandard1.3 is the correct choice for UAP 15063+. -->
-      <HintPath>$(MSBuildThisFileDirectory)..\packages\newtonsoft.json.12.0.3\lib\netstandard1.3\Newtonsoft.Json.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="DocumentFormat.OpenXml">
-      <HintPath>$(MSBuildThisFileDirectory)..\packages\documentformat.openxml.2.9.1\lib\netstandard1.3\DocumentFormat.OpenXml.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <!-- v1.4.0.31: NO manual BCL/facade <Reference>s here. Postmortem of v1.4.0.30:
-         hand-injecting netcore50 facade DLLs (System.ObjectModel, System.Runtime.WindowsRuntime*,
-         System.Runtime, ...) from ..\packages corrupts the NETFX_CORE compile universe:
-         the facades type-forward to mscorlib 4.0.0.0 which UAP resolution cannot load
-         from those paths -> CS0012 "add a reference to mscorlib" cascade (81 errors),
-         CS0234 System.CodeDom missing in *.g.i.cs, CS0122 IXmlNodeList accessibility.
-         In a correct UAP project ALL BCL/WinRT references (mscorlib-equivalent,
-         System.Runtime, System.ObjectModel, System.Runtime.WindowsRuntime[.UI.Xaml],
-         System.Private.Uri, ...) are supplied automatically by the Windows SDK
-         reference assemblies + Platform.winmd unification inside
-         Microsoft.Windows.UI.Xaml.CSharp.targets. Only third-party libs need explicit
-         wiring (Newtonsoft.Json / DocumentFormat.OpenXml above). The earlier WMC0003/
-         WMC1006 symptoms were caused solely by ..\packages not being restored at all -
-         fixed honestly by EnsurePackagesRestored + restore-before-build, not by faking
-         framework refs. -->
+    <!-- v1.4.0.34 FINAL: NO NuGet assembly references at all. Evidence chain that led here:
+         v1.4.0.30 hand-injected netcore50 facades -> 81 CS0012/CS0234;
+         v1.4.0.32 removed the UWP metapackage (its packages\netcore50 DLLs shadowed SDK
+         facades) -> WMC1006 persisted;
+         v1.4.0.33 clean tree (packages/obj/bin deleted, fresh restore) -> WMC1006/WMC9999
+         STILL persisted with only Newtonsoft.Json + DocumentFormat.OpenXml (netstandard1.3)
+         referenced. Root cause, verified byte-level against nuget.org assets: a
+         .NETStandard,v1.3 compile-time closure demands the whole NETSTANDARD1.3 facade
+         package graph (System.Runtime ref 4.0.20.0 etc.), which no UAP 15063 SDK install
+         contains - XamlCompiler type universe fails on the first one it cannot resolve.
+         Therefore both libs are REMOVED from the project:
+           - Newtonsoft.Json      -> vendored zero-dependency Helpers\JsonSerializer.cs
+           - DocumentFormat.OpenXml -> xlsx built directly as OPC zip via
+             System.IO.Compression.ZipArchive (Windows SDK, no NuGet).
+         The compile universe is now ONLY Windows SDK reference assemblies + Platform.winmd,
+         exactly like an untouched VS2017 UWP template - the configuration in which
+         System.Runtime 4.0.0.0 always resolves. No HintPath references may be added back;
+         if a third-party lib is ever needed again, it MUST ship a netcore50 or
+         uap10.0-targeted asset (see BUILD_VS2017.md section "Зависимости"). -->
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -249,16 +235,15 @@
        so the target was a no-op for its purpose anyway. The real fix stays in
        packages.config (metapackage dropped in v1.4.0.32): with no netcore50 facade
        DLLs on disk there is nothing to shadow the SDK reference assemblies. -->
-  <Target Name="EnsurePackagesRestored" BeforeTargets="ResolveAssemblyReferences;ResolveWinMDReferences">
-    <PropertyGroup>
-      <_PkgDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\packages\newtonsoft.json.12.0.3'))</_PkgDir>
-    </PropertyGroup>
-    <Message Importance="high" Text="packages folder missing/incomplete - running nuget restore (one-time, ~1 min)..." Condition="!Exists('$(_PkgDir)')" />
-    <Exec Command="&quot;$(_NuGetExe)&quot; restore &quot;$(MSBuildThisFileDirectory)..\Barometer_UWP.sln&quot;"
-          Condition="!Exists('$(_PkgDir)') And Exists('$(_NuGetExe)')" />
-    <NuGetRestoreTask SolutionDirectory="$(MSBuildThisFileDirectory)..\Barometer_UWP.sln"
-                      Condition="!Exists('$(_PkgDir)') And !Exists('$(_NuGetExe)') And Exists('$(_NuGetTasksAssembly)')" />
-    <Error Text="NuGet restore could not run automatically: nuget.exe not found at ..\.nuget\nuget.exe and VS NuGetTasks not found. Fix: install VS2017 NuGet tools, or download nuget.exe into .nuget\, or run Tools&gt;NuGet Package Manager&gt;Package Manager Console: 'nuget restore Barometer_UWP.sln'. The 18 'component not found' warnings and WMC1006 disappear after restore."
-          Condition="!Exists('$(_PkgDir)') And !Exists('$(_NuGetExe)') And !Exists('$(_NuGetTasksAssembly)')" />
+  <!-- v1.4.0.34 FINAL: NuGet restore is NO LONGER REQUIRED for compilation. The only
+       remaining package (microsoft.net.native.compiler) is an ILCompiler toolchain used at
+       .NET Native (Release) link time; VS's own .NET Native toolset covers Debug builds, and
+       the compiler package resolves via obj\*.nuget.g.props/.targets imports above when a
+       manual restore IS run. All previous WMC1006/WMC9999 'System.Runtime' failures came from
+       NuGet-sourced facade DLLs shadowing SDK reference assemblies; with zero compile-time
+       package references the universe is pure Windows SDK, so the old self-heal target keyed
+       on newtonsoft.json.12.0.3 was removed instead of being left to fail spuriously. -->
+  <Target Name="EnsurePackagesRestored" BeforeTargets="ResolveAssemblyReferences">
+    <Message Importance="low" Text="v1.4.0.34: no compile-time NuGet dependencies - restore skipped." />
   </Target>
 </Project>

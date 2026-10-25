@@ -12,6 +12,28 @@ namespace Barometer_UWP.Services
 {
     public class ExportService
     {
+        // v1.4.0.34: local replacement for System.Net.WebUtility.HtmlEncode - System.Net facade
+        // belongs to the NETSTANDARD1.3 package graph that broke the UAP XamlCompiler type
+        // universe (WMC1006). Pure BCL string ops only.
+        private static string HtmlEncodeHelper(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return string.Empty;
+            var sb = new System.Text.StringBuilder(s.Length);
+            foreach (char c in s)
+            {
+                switch (c)
+                {
+                    case '&': sb.Append("&amp;"); break;
+                    case '<': sb.Append("&lt;"); break;
+                    case '>': sb.Append("&gt;"); break;
+                    case '"': sb.Append("&quot;"); break;
+                    case '\'': sb.Append("&#39;"); break;
+                    default: sb.Append(c); break;
+                }
+            }
+            return sb.ToString();
+        }
+
         private DataService Data => App.Current?.Services?.DataService;
 
         public async Task ExportCsvAsync(StorageFile file, IEnumerable<PressureRecord> records = null, CultureInfo culture = null)
@@ -89,8 +111,8 @@ namespace Barometer_UWP.Services
         {
             if (file == null || pngBytes == null) return;
             var b64 = Convert.ToBase64String(pngBytes);
-            var html = $"<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>{System.Net.WebUtility.HtmlEncode(title)}</title></head>" +
-                       $"<body style=\"font-family:Segoe UI,sans-serif\"><h3>{System.Net.WebUtility.HtmlEncode(title)}</h3>" +
+            var html = $"<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>{HtmlEncodeHelper(title)}</title></head>" +
+                       $"<body style=\"font-family:Segoe UI,sans-serif\"><h3>{HtmlEncodeHelper(title)}</h3>" +
                        $"<img src=\"data:image/png;base64,{b64}\" alt=\"pressure chart\"/></body></html>";
             await FileIO.WriteTextAsync(file, html);
         }

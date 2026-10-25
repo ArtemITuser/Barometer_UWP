@@ -1,7 +1,6 @@
 using System;
-using System.Net.Http;
+using Windows.Web.Http; // v1.4.0.34: System.Net.Http facade lives only in the NETSTANDARD1.3 package graph that broke the XamlCompiler type universe (WMC1006); Windows.Web.Http ships with the UWP SDK winmd itself and is already used by AuthService/OneDriveService.
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 
 namespace Barometer_UWP.Services
 {
@@ -17,15 +16,18 @@ namespace Barometer_UWP.Services
                 {
                     httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Barometer-UWP-App");
                     
-                    var response = await httpClient.GetStringAsync(GITHUB_API_URL);
-                    var release = JsonConvert.DeserializeObject<GitHubRelease>(response);
-                    
+                    var response = await httpClient.GetStringAsync(new Uri(GITHUB_API_URL));
+                    // v1.4.0.34: vendored parser replaces Newtonsoft.Json (see Helpers\JsonSerializer.cs)
+                    string tag, rname, url; DateTime published;
+                    Barometer_UWP.Helpers.Json.ParseRelease(response, out tag, out rname, out url, out published);
+                    if (string.IsNullOrEmpty(tag)) return null;
+
                     return new ReleaseInfo
                     {
-                        Version = release.tag_name,
-                        Name = release.name,
-                        Url = release.html_url,
-                        PublishedAt = release.published_at
+                        Version = tag,
+                        Name = rname,
+                        Url = url,
+                        PublishedAt = published
                     };
                 }
             }
@@ -44,12 +46,4 @@ namespace Barometer_UWP.Services
         public DateTime PublishedAt { get; set; }
     }
 
-    // Internal class to match GitHub API response
-    internal class GitHubRelease
-    {
-        public string tag_name { get; set; }
-        public string name { get; set; }
-        public string html_url { get; set; }
-        public DateTime published_at { get; set; }
-    }
 }

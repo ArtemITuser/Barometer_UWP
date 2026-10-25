@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using Windows.Security.Authentication.Web;
 using Windows.Storage;
-using Newtonsoft.Json;
 
 namespace Barometer_UWP.Services
 {
@@ -64,8 +63,8 @@ namespace Barometer_UWP.Services
                 // Broker may return an authorization code — exchange it for tokens.
                 try
                 {
-                    var dict = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
-                    if (dict != null && dict.TryGetValue("code", out var authCode) && !string.IsNullOrEmpty(authCode))
+                    var authCode = Barometer_UWP.Helpers.Json.TryGetCode(response);
+                    if (!string.IsNullOrEmpty(authCode))
                         return await RedeemCodeAsync(authCode);
                 }
                 catch { }
@@ -162,8 +161,10 @@ namespace Barometer_UWP.Services
             if (string.IsNullOrWhiteSpace(json)) return null;
             try
             {
-                var t = JsonConvert.DeserializeObject<TokenResponse>(json);
-                return (t != null && !string.IsNullOrEmpty(t.AccessToken)) ? t : null;
+                string at, rt; long exp;
+                Barometer_UWP.Helpers.Json.ParseTokenResponse(json, out at, out rt, out exp);
+                if (string.IsNullOrEmpty(at)) return null;
+                return new TokenResponse { AccessToken = at, RefreshToken = rt, ExpiresIn = exp };
             }
             catch { return null; }
         }
@@ -190,9 +191,9 @@ namespace Barometer_UWP.Services
 
         private class TokenResponse
         {
-            [JsonProperty("access_token")] public string AccessToken { get; set; }
-            [JsonProperty("refresh_token")] public string RefreshToken { get; set; }
-            [JsonProperty("expires_in")] public long ExpiresIn { get; set; }
+            public string AccessToken { get; set; }
+            public string RefreshToken { get; set; }
+            public long ExpiresIn { get; set; }
         }
     }
 }

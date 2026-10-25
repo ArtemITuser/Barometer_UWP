@@ -18,45 +18,28 @@
 
 ## 1. Клонирование и восстановление пакетов
 
+**v1.4.0.34: проект больше НЕ имеет compile-time NuGet-зависимостей.** JSON — vendored
+(Helpers\JsonSerializer.cs), xlsx — на System.IO.Compression из Windows SDK. В packages.config
+остался только Microsoft.Net.Native.Compiler 1.7.3 (нужен лишь для Release/.NET Native; Debug
+собирается без restore вообще). Поэтому:
+
 ```bat
 git clone -b releases/stable https://github.com/ArtemITuser/Barometer_UWP.git
 cd Barometer_UWP
-install_deps.cmd        :: скачивает nuget.exe и делает nuget restore Barometer_UWP.sln
+install_deps.cmd        :: опционально: nuget restore для .NET Native compiler (Release)
 ```
 
-Или вручную:
-```bat
-nuget restore Barometer_UWP.sln
-```
+Можно открыть `Barometer_UWP.sln` сразу после распаковки zip — восстановления не требуется.
 
-**v1.4.0.30+: если вы распаковали release zip (не git clone) и видите в Error List
-2 ошибки «Cannot resolve System.Runtime.dll / Type universe cannot resolve assembly»
-и 18 предупреждений «Не найден компонент …, на который указывает ссылка»** — это значит,
-что папка `packages\` ещё не создана (в zip лежат только исходники). Начиная с v1.4.0.30
-проект восстанавливает пакеты сам при первой сборке (target EnsurePackagesRestored в csproj);
-если автоматический restore невозможен, выполните один из шагов:
-1. Правый клик по решению в Solution Explorer → **Restore NuGet Packages**.
-2. Tools → NuGet Package Manager → Package Manager Console: `nuget restore Barometer_UWP.sln`.
-3. Скачайте nuget.exe (https://dist.nuget.org/win-x86-commandline/latest/nuget.exe) в папку
-   `.nuget\` рядом с решением — csproj подхватит его автоматически.
-После успешного restore все диагностики MSB3245 исчезают (появится папка `packages\`
-с Newtonsoft.Json, DocumentFormat.OpenXml и .NET Native compiler).
-
-Проект использует **packages.config** (классический стиль), а НЕ PackageReference.
-ВАЖНО (v1.4.0.32): метапакет `Microsoft.NETCore.UniversalWindowsPlatform` из packages.config
-УДАЛЁН намеренно — его netcore50 facade DLL (`System.Runtime, Version=4.0.0.0`) из папки
-`packages\` перехватывались simple-name разрешением MSBuild/XamlCompiler и затеняли
-корректные SDK reference assemblies → WMC1006/WMC9999 «Cannot resolve System.Runtime.dll».
-Все BCL/WinRT ссылки классический UAP-проектный система берёт сама из Windows SDK
-(UnionMetadata + ReferenceAssemblies); runtime-IL .NET Core берётся из установленного в
-машине VC++ 2015-2019 UWP Desktop Runtime (ставится с VS2017). Таргет
-`StripPackageFacadeShadows`, добавлявшийся в v1.4.0.32 для дополнительной чистки, УДАЛЁН в
-v1.4.0.33: его Condition содержал item-batching @(PackageConflictFacadeNames), что запрещено
-синтаксисом MSBuild (MSB4092 — проект не загружался в IDE), и к тому же он был no-op'ом.
-Единственная защита от facade-теней — отсутствие метапакета в packages.config; поэтому если
-на машине осталась старая папка `packages\microsoft.netcore.universalwindowsplatform` от
-прежних restore, УДАЛИТЕ всю папку `packages\` перед сборкой v1.4.0.33. При открытии в VS:
-**Tools → NuGet Package Manager → Enable project restore** должен быть включён.
+**История болезни WMC1006/WMC9999 «System.Runtime» (почему раньше не собиралось):**
+- v1.4.0.28–31: метапакет Microsoft.NETCore.UniversalWindowsPlatform и/или инжект facade-DLL
+  из `packages\netcore50` затеняли SDK reference assemblies → каскады CS0012/WMC1006.
+- v1.4.0.32–33: метапакет убран, но остались Newtonsoft.Json + DocumentFormat.OpenXml с
+  asset-папками `lib/netstandard1.3`: их compile-time closure = весь граф NETSTANDARD1.3
+  facade-пакетов, которого нет в UAP SDK → XamlCompiler падал на первом же нерезолвленном
+  System.Runtime, 4.0.0.0.
+- v1.4.0.34: обе библиотеки удалены из сборки, сторонних сборочных зависимостей ноль —
+  вселенная типов = только Windows SDK + Platform.winmd (как в чистом шаблоне VS2017 UWP).
 
 ## 2. Подпись пакета (важно после клонирования!)
 
@@ -147,7 +130,7 @@ msbuild Barometer_UWP.sln /p:Configuration=Debug /p:Platform=x86
 ## 6. Быстрый чек-лист «клонировал → собрал»
 
 1. `git clone -b releases/stable … && cd Barometer_UWP`
-2. `install_deps.cmd` (или `nuget restore Barometer_UWP.sln`)
+2. (Опционально для Release) `install_deps.cmd` — Debug-сборка не требует restore
 3. Открыть `Barometer_UWP.sln` в VS2017 → Signing → Create Test Certificate
 4. Выбрать `Release | ARM`, Build Solution (F6)
 5. Телефон в режиме разработчика → Deploy (F5) — или взять `.appxbundle` из п.4
