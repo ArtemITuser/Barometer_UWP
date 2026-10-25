@@ -1,5 +1,41 @@
 # Barometer UWP — Changelog
 
+## v1.4.0.30-stable — Исправлены 2 ошибки + 18 предупреждений IDE (ненайденные ссылки) (2026-10-26)
+
+### Диагноз (сообщение пользователя из VS2017, сборка из zip релиза v1.4.0.29)
+- Ошибка: `Type universe cannot resolve assembly: System.Runtime, Version=4.0.0.0` (WMC1006)
+- Ошибка: `Cannot resolve Assembly or Windows Metadata file 'System.Runtime.dll'` (csproj)
+- 18 предупреждений MSB3245 «Не найден компонент … на который указывает ссылка»
+  (System.Runtime / .Extensions / .WindowsRuntime / .UI.Xaml, System.Linq, ObjectModel,
+  Collections(.Concurrent), IO, Globalization, Threading(.Tasks), Resources.ResourceManager,
+  Private.Uri, Net.Http, Diagnostics.Debug, Newtonsoft.Json, DocumentFormat.OpenXml).
+
+### Корень причины
+Release zip содержит только исходники — папка `..\packages` отсутствует; при этом
+`nuget.exe restore` для чистого packages.config-проекта НЕ создаёт
+`obj\Barometer_UWP.nuget.g.props`, поэтому весь netcore50-facade блок `<Reference>`
+в csproj указывает в несуществующие до restore папки → все ссылки нерезолвнуты.
+Дополнительно: пакет `system.private.uri` использовался в fallback-блоке, но отсутствовал
+в packages.config (restore не создал бы его папку даже после успешного restore).
+
+### Исправления
+1. **packages.config**: добавлен явный `system.private.uri 4.0.1` (сверено с HintPath).
+2. **csproj — самоисцеляющийся restore**: новый target `EnsurePackagesRestored`
+   (BeforeTargets=ResolveAssemblyReferences;ResolveWinMDReferences): если папка пакета
+   metapackage отсутствует, автоматически выполняется `nuget restore ..\Barometer_UWP.sln`
+   (через `.nuget\nuget.exe` или VS-bundled NuGetTasks.dll); если ни один путь недоступен —
+   понятная ошибка с инструкцией вместо 20 cryptic-диагностик. F5/Build в VS после
+   распаковки zip теперь работает без ручных шагов.
+3. Все версии платформ уже 15063 (csproj TargetPlatformVersion/MinVersion, manifest
+   MinVersion/MaxVersionTested) — подтверждено статическим прогоном.
+
+### Статическая приёмка v1.4.0.30 (без сборки, как заказано)
+- XML: 10/10 файлов парсятся; csproj well-formed, target сбалансирован.
+- 20 Reference-элементов с HintPath: каждый pkg+version существует в packages.config (0 расхождений).
+- Композиция: 42/42 исходника объявлены, битых ссылок нет; реальных Spacing=" — 0.
+- Версии синхронизированы: manifest/AssemblyInfo = 1.4.0.30.
+- GitHub Actions отключён (настройки репозитория) — CI не запускается, только ручной прогон.
+
 ## v1.4.0.29-stable — Финальный валидный релиз кода; GitHub Actions отключён (2026-10-26)
 
 ### Статус CI

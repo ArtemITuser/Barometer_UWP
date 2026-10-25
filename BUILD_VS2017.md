@@ -29,6 +29,18 @@ install_deps.cmd        :: скачивает nuget.exe и делает nuget re
 nuget restore Barometer_UWP.sln
 ```
 
+**v1.4.0.30+: если вы распаковали release zip (не git clone) и видите в Error List
+2 ошибки «Cannot resolve System.Runtime.dll / Type universe cannot resolve assembly»
+и 18 предупреждений «Не найден компонент …, на который указывает ссылка»** — это значит,
+что папка `packages\` ещё не создана (в zip лежат только исходники). Начиная с v1.4.0.30
+проект восстанавливает пакеты сам при первой сборке (target EnsurePackagesRestored в csproj);
+если автоматический restore невозможен, выполните один из шагов:
+1. Правый клик по решению в Solution Explorer → **Restore NuGet Packages**.
+2. Tools → NuGet Package Manager → Package Manager Console: `nuget restore Barometer_UWP.sln`.
+3. Скачайте nuget.exe (https://dist.nuget.org/win-x86-commandline/latest/nuget.exe) в папку
+   `.nuget\` рядом с решением — csproj подхватит его автоматически.
+После успешного restore все 20 диагностик исчезают (появится папка `packages\` с ~90 пакетами).
+
 Проект использует **packages.config** (классический стиль), а НЕ PackageReference —
 это принципиально для UAP-проектов на VS2017: только так подключаются WinRT-проекции
 метапакета `Microsoft.NETCore.UniversalWindowsPlatform 6.0.8`. При открытии в VS:
