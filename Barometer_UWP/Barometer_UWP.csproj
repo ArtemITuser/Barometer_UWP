@@ -179,27 +179,21 @@
       <HintPath>$(MSBuildThisFileDirectory)..\packages\documentformat.openxml.2.9.1\lib\netstandard1.3\DocumentFormat.OpenXml.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <!-- XamlCompiler (WMC) type universe does NOT follow NuGet transitive refs of the
-         UAP metapackage: without explicit References below, every {Binding ...} in XAML
-         fails with WMC0003 "cannot resolve System.Runtime.WindowsRuntime.UI.Xaml /
-         System.ObjectModel". These are the WinRT INotifyPropertyChanged projection and
-         ObservableCollection facades used by all binding-enabled pages. -->
-    <!-- NOTE: this facade package ships ONLY reference assemblies (lib/ has _._
-         placeholders; the real implementation lives in the .NET runtime). The DLL
-         is under ref/netcore50, NOT lib/uap10.0_* — previous HintPath pointed to a
-         nonexistent path, causing MSB3245 + 100+ WMC0003 errors on every {Binding}. -->
-    <Reference Include="System.Runtime.WindowsRuntime.UI.Xaml">
-      <HintPath>$(MSBuildThisFileDirectory)..\packages\system.runtime.windowsruntime.ui.xaml.4.0.1\ref\netcore50\System.Runtime.WindowsRuntime.UI.Xaml.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="System.ObjectModel">
-      <!-- v1.4.0.12c: use the netcore50 facade (type-forwarded to mscorlib), NOT the
-           netstandard1.3 implementation assembly. Referencing the ns1.3 dll injects a
-           duplicate System.Object into the compile universe -> CS0012 "add a reference to
-           mscorlib" + CS0234 System.Linq/System.Collections missing across all files. -->
-      <HintPath>$(MSBuildThisFileDirectory)..\packages\system.objectmodel.4.0.12\ref\netcore50\System.ObjectModel.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
+    <!-- v1.4.0.31: NO manual BCL/facade <Reference>s here. Postmortem of v1.4.0.30:
+         hand-injecting netcore50 facade DLLs (System.ObjectModel, System.Runtime.WindowsRuntime*,
+         System.Runtime, ...) from ..\packages corrupts the NETFX_CORE compile universe:
+         the facades type-forward to mscorlib 4.0.0.0 which UAP resolution cannot load
+         from those paths -> CS0012 "add a reference to mscorlib" cascade (81 errors),
+         CS0234 System.CodeDom missing in *.g.i.cs, CS0122 IXmlNodeList accessibility.
+         In a correct UAP project ALL BCL/WinRT references (mscorlib-equivalent,
+         System.Runtime, System.ObjectModel, System.Runtime.WindowsRuntime[.UI.Xaml],
+         System.Private.Uri, ...) are supplied automatically by the Windows SDK
+         reference assemblies + Platform.winmd unification inside
+         Microsoft.Windows.UI.Xaml.CSharp.targets. Only third-party libs need explicit
+         wiring (Newtonsoft.Json / DocumentFormat.OpenXml above). The earlier WMC0003/
+         WMC1006 symptoms were caused solely by ..\packages not being restored at all -
+         fixed honestly by EnsurePackagesRestored + restore-before-build, not by faking
+         framework refs. -->
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -208,42 +202,13 @@
     <VisualStudioVersion>14.0</VisualStudioVersion>
   </PropertyGroup>
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
-  <!-- packages.config NuGet wiring: without these imports the restored metapackage
-       Microsoft.NETCore.UniversalWindowsPlatform (WinRT projections + System.Runtime facade)
-       is never referenced at compile time -> WMC1006 'System.Runtime cannot be resolved'.
-       Condition guards keep VS2017 local builds working when obj\nuget.g.props was generated
-       by a prior nuget.exe restore. -->
-  <!-- v1.4.0.19 CI fallback: if obj/*.nuget.g.props was NOT generated (nuget.exe CLI
-       does not write it for bare packages.config), manually reference the netcore50
-       type-forwarded facades from the restored packages folder. Without these the
-       compile universe loses mscorlib unification -> CS0012 "add a reference to
-       mscorlib" cascade across App.xaml.cs/ChartRenderer/WriteableBitmapEx.
-       Condition keeps VS2017 local builds untouched (g.props exists there). -->
-  <PropertyGroup Condition="!Exists('$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.props')">
-    <_PkgRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\packages'))</_PkgRoot>
-  </PropertyGroup>
-  <!-- v1.4.0.20: per-reference Exists() guards. On CI (Linux-expanded nupkgs, case-
-       sensitive fs + mklink mirrors) some facade dirs may be absent; an unguarded
-       HintPath then hard-fails the precheck. With guards, any missing facade simply
-       drops out of the compile universe instead of aborting the build. -->
-  <ItemGroup Condition="'$(_PkgRoot)' != '' And Exists('$(_PkgRoot)')">
-    <Reference Include="System.Runtime" Condition="Exists('$(_PkgRoot)\system.runtime.4.1.0\ref\netcore50\System.Runtime.dll')"><HintPath>$(_PkgRoot)\system.runtime.4.1.0\ref\netcore50\System.Runtime.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="System.Linq" Condition="Exists('$(_PkgRoot)\system.linq.4.1.0\ref\netcore50\System.Linq.dll')"><HintPath>$(_PkgRoot)\system.linq.4.1.0\ref\netcore50\System.Linq.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="System.Collections" Condition="Exists('$(_PkgRoot)\system.collections.4.0.11\ref\netcore50\System.Collections.dll')"><HintPath>$(_PkgRoot)\system.collections.4.0.11\ref\netcore50\System.Collections.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="System.Collections.Concurrent" Condition="Exists('$(_PkgRoot)\system.collections.concurrent.4.0.12\ref\netcore50\System.Collections.Concurrent.dll')"><HintPath>$(_PkgRoot)\system.collections.concurrent.4.0.12\ref\netcore50\System.Collections.Concurrent.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="System.Runtime.Extensions" Condition="Exists('$(_PkgRoot)\system.runtime.extensions.4.1.0\ref\netcore50\System.Runtime.Extensions.dll')"><HintPath>$(_PkgRoot)\system.runtime.extensions.4.1.0\ref\netcore50\System.Runtime.Extensions.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="System.Threading.Tasks" Condition="Exists('$(_PkgRoot)\system.threading.tasks.4.0.11\ref\netcore50\System.Threading.Tasks.dll')"><HintPath>$(_PkgRoot)\system.threading.tasks.4.0.11\ref\netcore50\System.Threading.Tasks.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="System.Threading" Condition="Exists('$(_PkgRoot)\system.threading.4.0.11\ref\netcore50\System.Threading.dll')"><HintPath>$(_PkgRoot)\system.threading.4.0.11\ref\netcore50\System.Threading.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="System.Globalization" Condition="Exists('$(_PkgRoot)\system.globalization.4.0.11\ref\netcore50\System.Globalization.dll')"><HintPath>$(_PkgRoot)\system.globalization.4.0.11\ref\netcore50\System.Globalization.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="System.IO" Condition="Exists('$(_PkgRoot)\system.io.4.1.0\ref\netcore50\System.IO.dll')"><HintPath>$(_PkgRoot)\system.io.4.1.0\ref\netcore50\System.IO.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="System.Resources.ResourceManager" Condition="Exists('$(_PkgRoot)\system.resources.resourcemanager.4.0.1\ref\netcore50\System.Resources.ResourceManager.dll')"><HintPath>$(_PkgRoot)\system.resources.resourcemanager.4.0.1\ref\netcore50\System.Resources.ResourceManager.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="System.Diagnostics.Debug" Condition="Exists('$(_PkgRoot)\system.diagnostics.debug.4.0.11\ref\netcore50\System.Diagnostics.Debug.dll')"><HintPath>$(_PkgRoot)\system.diagnostics.debug.4.0.11\ref\netcore50\System.Diagnostics.Debug.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="System.Private.Uri" Condition="Exists('$(_PkgRoot)\system.private.uri.4.0.1\ref\netcore50\System.Private.Uri.dll')"><HintPath>$(_PkgRoot)\system.private.uri.4.0.1\ref\netcore50\System.Private.Uri.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="System.ObjectModel" Condition="Exists('$(_PkgRoot)\system.objectmodel.4.0.12\ref\netcore50\System.ObjectModel.dll')"><HintPath>$(_PkgRoot)\system.objectmodel.4.0.12\ref\netcore50\System.ObjectModel.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="System.Net.Http" Condition="Exists('$(_PkgRoot)\system.net.http.4.1.0\ref\netcore50\System.Net.Http.dll')"><HintPath>$(_PkgRoot)\system.net.http.4.1.0\ref\netcore50\System.Net.Http.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="System.Runtime.WindowsRuntime" Condition="Exists('$(_PkgRoot)\system.runtime.windowsruntime.4.0.11\ref\netcore50\System.Runtime.WindowsRuntime.dll')"><HintPath>$(_PkgRoot)\system.runtime.windowsruntime.4.0.11\ref\netcore50\System.Runtime.WindowsRuntime.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="System.Runtime.WindowsRuntime.UI.Xaml" Condition="Exists('$(_PkgRoot)\system.runtime.windowsruntime.ui.xaml.4.0.1\ref\netcore50\System.Runtime.WindowsRuntime.UI.Xaml.dll')"><HintPath>$(_PkgRoot)\system.runtime.windowsruntime.ui.xaml.4.0.1\ref\netcore50\System.Runtime.WindowsRuntime.UI.Xaml.dll</HintPath><Private>False</Private></Reference>
-  </ItemGroup>
+  <!-- v1.4.0.31: the v1.4.0.19/20 fallback block that injected netcore50 facade
+       <Reference>s when obj/*.nuget.g.props was absent is REMOVED. Evidence from the
+       user's machine (v1.4.0.30): those HintPath references resolve fine but poison the
+       NETFX_CORE compile universe -> CS0012 mscorlib cascade + CS0234 CodeDom + CS0122
+       IXmlNodeList (81 errors on rebuild/deploy). The standard nuget.g.props/.targets
+       imports below are the only supported packages.config wiring for UAP; combined with
+       EnsurePackagesRestored they cover fresh machines without manual facade faking. -->
   <Import Project="$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.props" Condition="Exists('$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.props')" />
   <Import Project="$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.targets" Condition="Exists('$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.targets')" />
   <!-- v1.4.0.30: self-healing restore. Root cause of MSB3245 'component not found' x18 +

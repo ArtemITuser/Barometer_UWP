@@ -1,5 +1,36 @@
 # Barometer UWP — Changelog
 
+## v1.4.0.31-stable — Откат facade-ссылок: исправлены 81 ошибка CS0012/CS0234 после перестройки (2026-10-26)
+
+### Диагноз (сообщение пользователя из VS2017, сборка из zip релиза v1.4.0.30)
+- После Clean осталось 1 предупреждение MSB3245 (`System.Private.Uri`).
+- После Rebuild/deploy: 81 ошибка CS0012 «Тип Object/Enum определен в сборке, на которую
+  нет ссылки… добавьте mscorlib 4.0.0.0», CS0234 `System.CodeDom` во всех *.g.i.cs,
+  CS0122 `IXmlNodeList`, CS0246 Canvas/WriteableBitmap.
+
+### Корень причины
+Эксперимент v1.4.0.30 (ручные `<Reference>` на netcore50-facade DLL из `..\packages`)
+ proved вредным: facades type-forward к mscorlib, который NETFX_CORE universe не грузит
+с этих путей — компилятор теряет унификацию типов и генерирует CS0012-каскад по всему
+проекту. В корректном UAP-проекте ВСЕ framework-ссылки (mscorlib/System.Runtime/
+ObjectModel/WindowsRuntime/Private.Uri) поставляются автоматически Windows SDK +
+Platform.winmd внутри Microsoft.Windows.UI.Xaml.CSharp.targets.
+
+### Исправление
+- csproj: удалён весь fallback-блок инжекта facade-`<Reference>` (v1.4.0.19/20) и явные
+  System.ObjectModel / System.Runtime.WindowsRuntime[.UI.Xaml] ссылки; остались только
+  Newtonsoft.Json и DocumentFormat.OpenXml (сторонние библиотеки).
+- packages.config: сведён к честному минимуму — метакет Microsoft.NETCore.UniversalWindowsPlatform
+  6.0.8 + Newtonsoft.Json 12.0.3 + DocumentFormat.OpenXml 2.9.1 + Microsoft.Net.Native.Compiler
+  1.7.3; транзитивные leaf-пакеты restore подтягивает сам.
+- Сохранён self-healing таргет EnsurePackagesRestored (авто-nuget restore до RAR) —
+  он лечит исходный MSB3245/WMC1006 без фейковых framework-ссылок.
+- Версии синхронизированы: manifest/AssemblyInfo = 1.4.0.31.
+
+### Статическая приёмка
+XML 10/10 OK; реальных Spacing= 0; References в csproj: только Newtonsoft.Json,
+DocumentFormat.OpenXml; все .cs/.xaml объявлены; undeclared 0.
+
 ## v1.4.0.30-stable — Исправлены 2 ошибки + 18 предупреждений IDE (ненайденные ссылки) (2026-10-26)
 
 ### Диагноз (сообщение пользователя из VS2017, сборка из zip релиза v1.4.0.29)
