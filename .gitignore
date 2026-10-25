@@ -9,9 +9,11 @@ x86/
 [Aa][Rr][Mm]64/
 AppPackages/
 BundleArtifacts/
+artifacts/
 *.appx
 *.appxbundle
 *.pri
+*.binlog
 
 # VS / user files
 .vs/
@@ -19,16 +21,21 @@ UserSettings/
 *.user
 *.suo
 *.userprefs
+*.userosscache
+*.sln.docstates
 
 # NuGet
 packages/
 *.nupkg
 project.lock.json
 project.fragment.lock.json
-artifacts/
+project.assets.json
 
 # Test harness (local only)
 .buildtest/
+
+# Release patch bundles (local artifacts)
+v1.4.0.*.patch
 
 # Logs
 *.log

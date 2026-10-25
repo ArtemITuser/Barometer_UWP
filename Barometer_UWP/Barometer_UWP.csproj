@@ -14,6 +14,11 @@
     <TargetPlatformVersion>10.0.15254.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.15063.0</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>14</MinimumVisualStudioVersion>
+    <!-- v1.4.0.28: pin restore style to packages.config so the project.assets.json /
+         project.json pipeline is never engaged (fixes NU1005 "project.json could not be
+         found" when MinVersion-based resolution runs on newer toolchains). -->
+    <RestoreProjectStyle>packages.config</RestoreProjectStyle>
+    <PackageReferenceUpdateAutomaticAtRestoreTime>false</PackageReferenceUpdateAutomaticAtRestoreTime>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <WindowsXamlEnableOverview>true</WindowsXamlEnableOverview>

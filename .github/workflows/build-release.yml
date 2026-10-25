@@ -54,22 +54,34 @@ jobs:
           Write-Host "Compile-time UAP=$ver ; appxmanifest Target stays 10.0.15254.0"
           Add-Content -Path $env:GITHUB_ENV -Value "UAP_PINNED_VERSION=$ver"
 
-      - name: Patch project for CI (override TargetPlatformMinVersion, MSBuild imports, signing)
+      - name: Patch project for CI (compile-time platform version, MSBuild imports, signing)
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $csproj = "Barometer_UWP\Barometer_UWP.csproj"
           $raw = Get-Content $csproj -Raw
-          # 1) Override MinVersion with the pinned SDK too: nuget picks uap10.0.<min> target
-          #    folder from it; packages.config has no assets for 15063 on this toolchain.
-          $raw = $raw -replace '<TargetPlatformMinVersion>[^<]*</TargetPlatformMinVersion>', "<TargetPlatformMinVersion>${{ env.UAP_PINNED_VERSION }}</TargetPlatformMinVersion>"
-          # 2) Fix Microsoft.Common.props import: hard-coded $(MSBuildToolsVersion) path does not
+          # v1.4.0.27c FIX: TargetPlatformMinVersion stays at the shipped 10.0.15063.0 in
+          # csproj/sln/manifest. The old override of MinVersion to the runner's newest SDK
+          # made NuGet resolve the UWP metapackage against uap10.0.<newest> and engaged the
+          # VS restore pipeline that demands a non-existent Barometer_UWP\project.json
+          # (NU1005 "project.json could not be found"). Compile-time surface is now pinned
+          # only via TargetPlatformVersion; 15063 runtime compatibility is guaranteed by the
+          # removed StackPanel.Spacing (v1.4.0.27) and netcore50 facade references.
+          # 1) Compile against the newest installed UAP surface on the runner (backward
+          #    compatible down to MinVersion 15063); appxmanifest keeps 15254 as contract.
+          $raw = $raw -replace '<TargetPlatformVersion>[^<]*</TargetPlatformVersion>', "<TargetPlatformVersion>$env:UAP_PINNED_VERSION</TargetPlatformVersion>"
+          # 2) Force packages.config restore style so the project.assets.json/project.json
+          #    pipeline is never engaged by msbuild /t:Restore or VS design-time build.
+          if ($raw -notmatch '<RestoreProjectStyle>') {
+            $raw = $raw -replace '<MinimumVisualStudioVersion>', "    <RestoreProjectStyle>packages.config</RestoreProjectStyle>`n    <PackageReferenceUpdateAutomaticAtRestoreTime>false</PackageReferenceUpdateAutomaticAtRestoreTime>`n    <MinimumVisualStudioVersion>"
+          }
+          # 3) Fix Microsoft.Common.props import: hard-coded $(MSBuildToolsVersion) path does not
           #    exist under VS2022 layout -> UWP .winmd references silently drop (mass CS0234).
           $raw = $raw.Replace('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props', '$(MSBuildExtensionsPath)\Microsoft\Common\Microsoft.Common.props')
-          # 3) Disable package signing in CI (no private pfx key on runner).
+          # 4) Disable package signing in CI (no private pfx key on runner).
           $raw = $raw -replace '</Project>\s*$', "  <PropertyGroup>`n    <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>`n  </PropertyGroup>`n</Project>`n"
           Set-Content $csproj $raw -Encoding UTF8
-          Select-String -Path $csproj -Pattern 'TargetPlatformMinVersion|Common\.props|AppxPackageSigningEnabled' | ForEach-Object { $_.Line.Trim() }
+          Select-String -Path $csproj -Pattern 'TargetPlatform(Min)?Version|RestoreProjectStyle|Common\.props|AppxPackageSigningEnabled' | ForEach-Object { $_.Line.Trim() }
 
       - name: NuGet restore packages.config (classic UWP toolchain)
         shell: powershell
@@ -170,92 +182,30 @@ jobs:
           if (-not (Test-Path "packages\Microsoft.NETCore.UniversalWindowsPlatform.6.0.8")) { Write-Host "::error::UAP metapackage missing"; exit 1 }
           Write-Host ("package count after full restore: " + (Get-ChildItem packages -Directory).Count)
 
-      - name: Generate obj\nuget.g.props/targets (packages.config wiring for MSBuild)
+      - name: Generate minimal obj\\nuget.g.props (NuGet wiring only, zero Reference items)
         shell: powershell
         run: |
           # Classic packages.config projects rely on VS writing obj\<proj>.nuget.g.props into the
           # csproj's obj folder; nuget.exe CLI restore does NOT do this for a bare packages.config
-          # invocation. Without those imports the restored UWP metapackage (System.Runtime facades,
-          # WinRT projections) is invisible to XamlCompiler/CSC -> WMC1006 + CS2001 cascade.
-          # Emulate them manually against the restored packages folder.
+          # invocation. Without those imports the restored UWP metapackage is invisible to
+          # XamlCompiler/CSC -> WMC1006 + CS2001 cascade. Emulate a MINIMAL props file:
+          # NuGet wiring properties only, NO <Reference> items.
+          # v1.4.0.27c FIX (duplicate-reference cascade): the previous version injected one
+          # <Reference> per packages.config entry with absolute HintPaths. The csproj already
+          # carries explicit References for Newtonsoft.Json, DocumentFormat.OpenXml,
+          # System.Runtime.WindowsRuntime.UI.Xaml and System.ObjectModel with RELATIVE HintPaths
+          # pointing at the same files -> MSBuild assigns the same target filename to two
+          # different source assemblies -> "The 'Reference' declarations... conflict" errors,
+          # plus netstandard1.x implementation facades (ref\netstandard1.3 fallback pattern)
+          # re-introduced the CS0012 mscorlib duplicate-System.Object universe from v1.4.0.16b.
+          # The compile universe stays owned exclusively by the csproj (SDK winmd set via
+          # Microsoft.Windows.UI.Xaml.CSharp.targets + the guarded netcore50 facade ItemGroup).
           $ErrorActionPreference = "Stop"
           $projDir = "Barometer_UWP"
           $objDir  = Join-Path $projDir "obj"
           New-Item -ItemType Directory -Force -Path $objDir | Out-Null
           $pkgRoot = Join-Path (Get-Location).Path "packages"
           $solRoot = (Get-Location).Path
-          # v1.4.0.16b ROOT CAUSE of CS0012-mscorlib/CS0234-System.Linq cascade:
-          # picking the netstandard1.3 *implementation* System.Runtime.dll injects a duplicate
-          # System.Object into the compile universe (it does NOT type-forward to mscorlib).
-          # Must use the netcore50 *facade* assemblies (type-forwarded), exactly like the
-          # System.ObjectModel fix in csproj. Prefer ref/netcore50, then any netcore50 facade.
-          # v1.4.0.22: the UWP compile universe is provided ENTIRELY by the SDK winmd
-          # assemblies that Microsoft.Windows.UI.Xaml.CSharp.targets adds automatically
-          # (Windows.winmd -> type-forwards mscorlib + all System.* facades). Enumerating
-          # restored package DLLs with Get-ChildItem -Recurse injected NETSTANDARD1.x
-          # *implementation* copies of System.Runtime/System.Linq/... ahead of the SDK set
-          # -> duplicate System.Object/ValueType/Enum -> CS0012 "add a reference to mscorlib",
-          # CS0122 "'Color'/'Point' inaccessible", CS0246 "'Canvas' not found". The props file
-          # now carries only NuGet wiring properties; zero <Reference> items.
-          # v1.4.0.22b: env vars written via Add-Content GITHUB_ENV are only interpolated into
-          # GH expressions at JOB start - use the live $env: variable instead, and probe
-          # all installed UnionMetadata dirs (pick newest) rather than assuming a match.
-          # v1.4.0.25 FIX: this step failed on windows-2022 because it hard-exited when no
-          # UnionMetadata\*\*.winmd was found. Modern images ship SDKs WITHOUT the OneCore
-          # (Mobile) contract, so UAP 15254 is absent -> exit 1 killed the job before msbuild.
-          # The winmd universe is NOT needed here at all (Xaml.CSharp.targets resolves it via
-          # WindowsSDKVersion), so the probe is now purely diagnostic: warn and continue.
-          $umRoot = "C:\Program Files (x86)\Windows Kits\10\UnionMetadata"
-          if (Test-Path $umRoot) {
-            $dirs = @(Get-ChildItem $umRoot -Directory -EA SilentlyContinue)
-            foreach ($d in $dirs) {
-              $n = @(Get-ChildItem $d.FullName -Recurse -Filter "*.winmd" -EA SilentlyContinue).Count
-              Write-Host ("  UnionMetadata\$($d.Name): $n winmd")
-            }
-            $onecore = $false
-            foreach ($d in $dirs) {
-              $u = Join-Path $d.FullName "OneCore.winmd"
-              if (Test-Path $u) { $onecore = $true }
-              $fa = Join-Path $d.FullName "Facade"
-              if ((Get-ChildItem $fa -Filter "*.winmd" -EA SilentlyContinue | Measure-Object).Count -gt 5) { $onecore = $true }
-            }
-            if (-not $onecore) {
-              Write-Host "::warning::No OneCore/Windows.Mobile winmd universe found on this runner - Mobile-targeted UWP build may fail at XamlCompiler. Consider self-hosted VS2017 runner."
-            }
-          } else {
-            Write-Host "::warning::$umRoot missing - Windows 10 SDK not installed on runner?"
-          }
-          # v1.4.0.26 FIX (WMC1006 root cause): XamlCompiler resolves the simple identity
-          # 'System.Runtime, Version=4.0.0.0' ONLY from an explicit <Reference> item — the SDK
-          # winmd universe does not provide it as a managed reference on VS2022 runners.
-          # VS's own NuGet targets inject these refs from packages.config; nuget.exe CLI does
-          # NOT, and our previous props carried zero items (v22 theory was wrong). Inject real
-          # Reference items with netcore50 facade HintPaths (ref assemblies, type-forwarded —
-          # never lib/netstandard impl copies, that caused the CS0012 mscorlib cascade in v16b).
-          # v1.4.0.27b FIX: enumerate packages.config directly (the previous loop iterated an
-          # undefined $seen table -> PowerShell ParserError killed this step before msbuild ran).
-          # Escaping note: YAML block scalar passes text through verbatim, so inside a PS
-          # double-quoted string the XML quotes must be written as `" (backtick), NOT \".
-          $pcPath = Join-Path $projDir "packages.config"
-          [xml]$pcDoc = Get-Content $pcPath
-          $refs = New-Object System.Collections.Generic.List[string]
-          foreach ($p in $pcDoc.packages.package) {
-            $id = $p.id; $ver = $p.version
-            if ($id -notmatch '^(system|microsoft\.netcore)\.' -and $id -ne 'Newtonsoft.Json') { continue }
-            $base = Join-Path $pkgRoot ("$id.$ver")
-            if (-not (Test-Path $base)) { Write-Host ("  skip (not restored): $id $ver"); continue }
-            $dll = @()
-            foreach ($pat in @('ref\netcore50','ref\netstandard1.3','ref\netstandard1.0','lib\uap10.0','lib\netcore50')) {
-              $c = Get-ChildItem (Join-Path $base $pat) -Filter '*.dll' -EA SilentlyContinue | Select-Object -First 1
-              if ($c) { $dll = @($c); break }
-            }
-            if (-not $dll) { Write-Host ("  skip (no ref dll): $id $ver"); continue }
-            $asm = [IO.Path]::GetFileNameWithoutExtension($dll[0].Name)
-            $hp = $dll[0].FullName.Replace('\','\\')
-            $refs.Add('    <Reference Include="' + $asm + '"><HintPath>' + $hp + '</HintPath><Private>False</Private></Reference>')
-          }
-          Write-Host ("injected facade references: " + $refs.Count)
-          # Build the props file line-by-line to avoid here-string/YAML indentation pitfalls.
           $lines = @(
             '<?xml version="1.0" encoding="utf-8"?>',
             '<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">',
@@ -265,9 +215,6 @@ jobs:
             '    <PackagesConfig>true</PackagesConfig>',
             "    <PackagesDir>$pkgRoot\</PackagesDir>",
             '  </PropertyGroup>',
-            '  <ItemGroup>'
-          ) + $refs + @(
-            '  </ItemGroup>',
             '</Project>'
           )
           Set-Content (Join-Path $objDir "Barometer_UWP.nuget.g.props") $lines -Encoding UTF8

@@ -1,5 +1,36 @@
 # Barometer UWP — Changelog
 
+## v1.4.0.28-stable — Исправления сборки CI: project.json, дубли Reference, версии 15063 (2026-10-25)
+
+### Ошибка "project.json could not be found" (NU1005)
+- Корень: шаг "Patch project for CI" переопределял `TargetPlatformMinVersion` csproj на самый
+  свежий SDK раннера; NuGet начинал разрешение метапакета для uap10.0.<newest> и включал
+  конвейер restore проекта JSON, требовавший несуществующий `Barometer_UWP\project.json`.
+- Исправлено: `TargetPlatformMinVersion` больше не патчится — в csproj/sln/appxmanifest
+  зафиксирован **минимум 10.0.15063.0** (Windows 10 Mobile / Creators Update). Компилирующая
+  поверхность ограничивается только `TargetPlatformVersion` (пин на SDK раннера, обратно
+  совместим до 15063). В csproj явно добавлены `RestoreProjectStyle=packages.config` и
+  `PackageReferenceUpdateAutomaticAtRestoreTime=false` — конвейер project.assets.json/project.json
+  не задействуется никогда (ни в CI, ни при design-time сборке в VS).
+
+### Дублирующиеся ссылки (конфликт Reference-деклараций)
+- Шаг генерации `obj\Barometer_UWP.nuget.g.props` инжектировал по `<Reference>` на каждую
+  запись packages.config с абсолютными HintPath'ами — MSBuild видел два разных источника для
+  одинаковых выходных имён (Newtonsoft.Json, DocumentFormat.OpenXml, System.ObjectModel,
+  System.Runtime.WindowsRuntime.UI.Xaml уже объявлены в csproj с относительными HintPath'ами),
+  а фолбэк-паттерн `ref\netstandard1.3` возвращал netstandard-реализацииfacade'ы → каскад
+  CS0012 (duplicate System.Object) из v1.4.0.16b.
+- Исправлено: props-файл теперь содержит **только** свойства обвязки NuGet
+  (SolutionDir/PackagesDir/NuGetProjectStyle), ноль `<Reference>` items. Вселенная компиляции
+  принадлежит исключительно csproj (winmd-набор SDK через Microsoft.Windows.UI.Xaml.CSharp.targets
+  + защищённая ItemGroup netcore50-facade'ов).
+
+### Версии
+- Package.appxmanifest / AssemblyInfo: **1.4.0.28**; целевые платформы без изменений:
+  Target 10.0.15254.0, **MinVersion 10.0.15063.0** (csproj строки 14–15, manifest Dependencies).
+- .gitignore восстановлен в полном виде (bin/obj/packages/AppPackages/artifacts и пр.) —
+  предыдущая версия случайно вырезала правила и грозила попаданием мусора восстановления в git.
+
 ## v1.4.0.27-stable — XAML Spacing (16299+) и чистка sln (2026-10-25)
 
 ### StackPanel.Spacing — API доступен только с Windows 10 16299+
