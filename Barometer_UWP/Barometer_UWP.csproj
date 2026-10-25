@@ -11,9 +11,14 @@
     <AssemblyName>Barometer_UWP</AssemblyName>
     <DefaultLanguage>ru-RU</DefaultLanguage>
     <TargetPlatformIdentifier>UAP</TargetPlatformIdentifier>
-    <TargetPlatformVersion>10.0.15254.0</TargetPlatformVersion>
+    <TargetPlatformVersion>10.0.15063.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.15063.0</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>14</MinimumVisualStudioVersion>
+    <!-- v1.4.0.28: pin restore style to packages.config so the project.assets.json /
+         project.json pipeline is never engaged (fixes NU1005 "project.json could not be
+         found" when MinVersion-based resolution runs on newer toolchains). -->
+    <RestoreProjectStyle>packages.config</RestoreProjectStyle>
+    <PackageReferenceUpdateAutomaticAtRestoreTime>false</PackageReferenceUpdateAutomaticAtRestoreTime>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <WindowsXamlEnableOverview>true</WindowsXamlEnableOverview>
@@ -241,4 +246,30 @@
   </ItemGroup>
   <Import Project="$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.props" Condition="Exists('$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.props')" />
   <Import Project="$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.targets" Condition="Exists('$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.targets')" />
+  <!-- v1.4.0.30: self-healing restore. Root cause of MSB3245 'component not found' x18 +
+       WMC1006 'System.Runtime, Version=4.0.0.0 cannot be resolved' on fresh machines:
+       the source-only zip ships WITHOUT the ..\packages folder and nuget.exe does not
+       generate obj\*.nuget.g.props for bare packages.config projects, so every facade
+       HintPath above resolves to a nonexistent path until a manual restore is run.
+       This target fires before ResolveAssemblyReferences and runs nuget restore itself
+       (via VS-bundled NuGetTasks assembly - no nuget.exe needed on PATH). If neither
+       nuget.exe nor the VS assembly is found it fails with an actionable message
+       instead of the cryptic 20 unresolved-reference diagnostics. -->
+  <PropertyGroup>
+    <_NuGetExe Condition="'$(_NuGetExe)'=='' And Exists('$(MSBuildThisFileDirectory)..\.nuget\nuget.exe')">$(MSBuildThisFileDirectory)..\.nuget\nuget.exe</_NuGetExe>
+    <_NuGetTasksAssembly>$([MSBuild]::ValueOrDefault('$(VsInstallRoot)','C:\Program Files (x86)\Microsoft Visual Studio'))\MSBuild\Microsoft\nuget10\NuGetTasks.dll</_NuGetTasksAssembly>
+  </PropertyGroup>
+  <UsingTask TaskName="NuGetRestoreTask" AssemblyFile="$(_NuGetTasksAssembly)" Condition="!Exists('$(_NuGetExe)') And Exists('$(_NuGetTasksAssembly)')" />
+  <Target Name="EnsurePackagesRestored" BeforeTargets="ResolveAssemblyReferences;ResolveWinMDReferences">
+    <PropertyGroup>
+      <_PkgDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\packages\microsoft.netcore.universalwindowsplatform.6.0.8'))</_PkgDir>
+    </PropertyGroup>
+    <Message Importance="high" Text="packages folder missing/incomplete - running nuget restore (one-time, ~1 min)..." Condition="!Exists('$(_PkgDir)')" />
+    <Exec Command="&quot;$(_NuGetExe)&quot; restore &quot;$(MSBuildThisFileDirectory)..\Barometer_UWP.sln&quot;"
+          Condition="!Exists('$(_PkgDir)') And Exists('$(_NuGetExe)')" />
+    <NuGetRestoreTask SolutionDirectory="$(MSBuildThisFileDirectory)..\Barometer_UWP.sln"
+                      Condition="!Exists('$(_PkgDir)') And !Exists('$(_NuGetExe)') And Exists('$(_NuGetTasksAssembly)')" />
+    <Error Text="NuGet restore could not run automatically: nuget.exe not found at ..\.nuget\nuget.exe and VS NuGetTasks not found. Fix: install VS2017 NuGet tools, or download nuget.exe into .nuget\, or run Tools&gt;NuGet Package Manager&gt;Package Manager Console: 'nuget restore Barometer_UWP.sln'. The 18 'component not found' warnings and WMC1006 disappear after restore."
+          Condition="!Exists('$(_PkgDir)') And !Exists('$(_NuGetExe)') And !Exists('$(_NuGetTasksAssembly)')" />
+  </Target>
 </Project>

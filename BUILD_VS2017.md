@@ -1,0 +1,143 @@
+# Barometer UWP — сборка в Visual Studio 2017 (Windows 10 Mobile / Lumia 950)
+
+**Стабильная ветка релизов:** `releases/stable` · **Версия:** 1.4.0.27 · **Тег:** `v1.4.0.27-stable`
+
+---
+
+## 0. Требования к окружению (строго для VS2017)
+
+| Компонент | Версия | Зачем |
+|---|---|---|
+| Visual Studio 2017 | 15.x (Update 9+, сборка ≥ 28307) | классическая система проектов UWP |
+| Workload «Universal Windows Platform development» | — | шаблоны + XAML-тулчейн |
+| .NET Native Toolchain | 1.7.3 (ставится NuGet-restore автоматически) | Release\ARM требует `<UseDotNetNativeToolchain>true</UseDotNetNativeToolchain>` |
+| Windows SDK | 10.0.15254 (устанавливается отдельно!) | TargetPlatformVersion проекта |
+| Windows 10 Mobile Emulator 15254.1 | из SDK-компонента «Mobile device pack» | только для x86-тестов (опционально) |
+
+> ⚠️ VS2017 не устанавливает SDK 15254 по умолчанию. Скачайте «Windows SDK for Windows 10 (10.0.15254)» из Microsoft Download Center или включите его через VS Installer → Individual components → «Windows 10 SDK (10.0.15254.1)».
+
+## 1. Клонирование и восстановление пакетов
+
+```bat
+git clone -b releases/stable https://github.com/ArtemITuser/Barometer_UWP.git
+cd Barometer_UWP
+install_deps.cmd        :: скачивает nuget.exe и делает nuget restore Barometer_UWP.sln
+```
+
+Или вручную:
+```bat
+nuget restore Barometer_UWP.sln
+```
+
+**v1.4.0.30+: если вы распаковали release zip (не git clone) и видите в Error List
+2 ошибки «Cannot resolve System.Runtime.dll / Type universe cannot resolve assembly»
+и 18 предупреждений «Не найден компонент …, на который указывает ссылка»** — это значит,
+что папка `packages\` ещё не создана (в zip лежат только исходники). Начиная с v1.4.0.30
+проект восстанавливает пакеты сам при первой сборке (target EnsurePackagesRestored в csproj);
+если автоматический restore невозможен, выполните один из шагов:
+1. Правый клик по решению в Solution Explorer → **Restore NuGet Packages**.
+2. Tools → NuGet Package Manager → Package Manager Console: `nuget restore Barometer_UWP.sln`.
+3. Скачайте nuget.exe (https://dist.nuget.org/win-x86-commandline/latest/nuget.exe) в папку
+   `.nuget\` рядом с решением — csproj подхватит его автоматически.
+После успешного restore все 20 диагностик исчезают (появится папка `packages\` с ~90 пакетами).
+
+Проект использует **packages.config** (классический стиль), а НЕ PackageReference —
+это принципиально для UAP-проектов на VS2017: только так подключаются WinRT-проекции
+метапакета `Microsoft.NETCore.UniversalWindowsPlatform 6.0.8`. При открытии в VS:
+**Tools → NuGet Package Manager → Enable project restore** должен быть включён.
+
+## 2. Подпись пакета (важно после клонирования!)
+
+Файл `.pfx` намеренно не хранится в git (см. `.gitignore`). При первом открытии в VS
+или первой сборке **Signing-вкладка проекта сообщит об отсутствии ключа**:
+
+* Вариант А (рекомендуется): откройте `Barometer_UWP` → Properties → **Signing** →
+  **Select from Store… / Create Test Certificate** → задайте пустой пароль. VS создаст
+  `Barometer_UWP_TemporaryKey.pfx` рядом с csproj, сборка продолжится без правок.
+* Вариант Б (CLI): 
+  ```bat
+  makecert -r -pe -n "CN=ArtemITuser" -ss BarometerTest Barometer_UWP.cer
+  pvk2pfx -pvk BarometerTest.pvk -spc Barometer_UWP.cer -pfx Barometer_UWP_TemporaryKey.pfx
+  ```
+
+Для сайдлоада на Lumia 950 установите этот же `.cer` на устройство (перешлите файл
+на телефон → установить доверенный корень) либо деплойте из VS (он делает это сам).
+
+## 3. Конфигурации сборки и архитектуры (сознательно закомментированы)
+
+Решение `Barometer_UWP.sln` содержит ровно 4 конфигурации:
+
+```
+Debug|ARM      Debug|x86
+Release|ARM    Release|x86
+```
+
+* **ARM = ARM32 (`PlatformTarget=ARM`)** — основной целевой путь для Lumia 950/950 XL
+  и HP Elite x3 (Snapdragon 808/810, Windows 10 Mobile 15254.603).
+  Деплой: `Build Release|ARM` → Device Portal / VS Deploy.
+* **x86 — ТОЛЬКО для эмулятора Mobile 15254.1.** На реальном телефоне не работает;
+  оставлена опциональной по требованию ТЗ. Эмулятор ставится тем же SDK-компонентом.
+
+### Почему нет ARM64 и x64 (задокументировано здесь; в sln — только валидные секции)
+
+Ранее эти заметки хранились в `Barometer_UWP.sln` в виде `REM`-строк между заголовком
+файла и первой секцией `Project(...)`. Это синтаксис cmd/MSBuild, а не SLN: парсер
+Visual Studio такие строки вне Global-секций не понимает (риск "the solution file is
+malformed"). В v1.4.0.27 блок удалён из sln; конспект сохранён здесь:
+
+```
+[DISABLED] Debug|ARM64 / Release|ARM64 — ARM64 НЕ поддерживается Windows 10 Mobile
+(builds 15254.603 / 15400.0). Целевые устройства (Lumia 950/950XL, Elite x3) — ARM32.
+Включать ARM64 можно только во вторичном десктопном sln (UWP PC), см. ниже.
+```
+
+Аналогично `x64` отсутствует — он нужен только десктопной редакции UWP, а не мобильной.
+
+### Десктопный вариант (опционально, отдельный sln)
+
+Если понадобится сборка под десктоп Windows 10/11 (там доступен ARM64 и новые фичи
+плитки Large Tile из 15400+), скопируйте проект в отдельное решение:
+
+```bat
+copy Barometer_UWP.sln Barometer_UWP.Desktop.sln
+:: затем в Desktop-sln добавьте конфигурации x64|ARM64 и в csproj переопределите
+:: <TargetDeviceFamily Name="Windows.Universal" .../> (уже подходит).
+:: Мобильный sln остаётся нетронутым.
+```
+
+В текущем мобильном sln конфигураций ARM64/x64 нет вовсе —
+так требуемо: «Windows.Mobile, arm32 first, x86 строго опционально».
+
+## 4. Сборка
+
+```bat
+:: Релизный ARM32 бандл для Lumia:
+msbuild Barometer_UWP.sln /p:Configuration=Release /p:Platform=ARM /p:AppxBundle=Always /p:AppxBundlePlatforms="arm"
+
+:: Отладка на эмуляторе (опционально):
+msbuild Barometer_UWP.sln /p:Configuration=Debug /p:Platform=x86
+```
+
+Выход: `Barometer_UWP/bin/ARM/Release/AppxPackages/Barometer_UWP_1.4.0.27_arm.appxbundle`.
+
+## 5. Что уже проверено статически (почему код считается стабильным)
+
+* Roslyn-харнесс (Linux, реальные UAP reference-сборки) компилирует весь C#-код
+  приложения без ошибок (последний прогон: 0 errors, только CS1998 warnings).
+* Все Compile/Page/PRIResource/Content-записи csproj соответствуют файлам в дереве.
+* XML csproj/sln/appxmanifest/packages.config проходят парсер; GUID sln == csproj.
+* packages.config включает полный closure transitive-зависимостей метпака UWP 6.0.8 —
+  `nuget restore` одного уровня достаточно (без PackageReference-довольствий).
+* CI GitHub Actions больше не является источником истины для мобильного билда
+  (legacy-UWP unsupported на современных runner'ах); для автосборки используйте
+  self-hosted runner с VS2017 + SDK 15254 (workflow `build-release.yml` совместим).
+
+## 6. Быстрый чек-лист «клонировал → собрал»
+
+1. `git clone -b releases/stable … && cd Barometer_UWP`
+2. `install_deps.cmd` (или `nuget restore Barometer_UWP.sln`)
+3. Открыть `Barometer_UWP.sln` в VS2017 → Signing → Create Test Certificate
+4. Выбрать `Release | ARM`, Build Solution (F6)
+5. Телефон в режиме разработчика → Deploy (F5) — или взять `.appxbundle` из п.4
+
+Готово: приложение стартует на Lumia 950/950 XL / HP Elite x3 (15254.603).

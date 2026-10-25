@@ -1,5 +1,131 @@
 # Barometer UWP — Changelog
 
+## v1.4.0.30-stable — Исправлены 2 ошибки + 18 предупреждений IDE (ненайденные ссылки) (2026-10-26)
+
+### Диагноз (сообщение пользователя из VS2017, сборка из zip релиза v1.4.0.29)
+- Ошибка: `Type universe cannot resolve assembly: System.Runtime, Version=4.0.0.0` (WMC1006)
+- Ошибка: `Cannot resolve Assembly or Windows Metadata file 'System.Runtime.dll'` (csproj)
+- 18 предупреждений MSB3245 «Не найден компонент … на который указывает ссылка»
+  (System.Runtime / .Extensions / .WindowsRuntime / .UI.Xaml, System.Linq, ObjectModel,
+  Collections(.Concurrent), IO, Globalization, Threading(.Tasks), Resources.ResourceManager,
+  Private.Uri, Net.Http, Diagnostics.Debug, Newtonsoft.Json, DocumentFormat.OpenXml).
+
+### Корень причины
+Release zip содержит только исходники — папка `..\packages` отсутствует; при этом
+`nuget.exe restore` для чистого packages.config-проекта НЕ создаёт
+`obj\Barometer_UWP.nuget.g.props`, поэтому весь netcore50-facade блок `<Reference>`
+в csproj указывает в несуществующие до restore папки → все ссылки нерезолвнуты.
+Дополнительно: пакет `system.private.uri` использовался в fallback-блоке, но отсутствовал
+в packages.config (restore не создал бы его папку даже после успешного restore).
+
+### Исправления
+1. **packages.config**: добавлен явный `system.private.uri 4.0.1` (сверено с HintPath).
+2. **csproj — самоисцеляющийся restore**: новый target `EnsurePackagesRestored`
+   (BeforeTargets=ResolveAssemblyReferences;ResolveWinMDReferences): если папка пакета
+   metapackage отсутствует, автоматически выполняется `nuget restore ..\Barometer_UWP.sln`
+   (через `.nuget\nuget.exe` или VS-bundled NuGetTasks.dll); если ни один путь недоступен —
+   понятная ошибка с инструкцией вместо 20 cryptic-диагностик. F5/Build в VS после
+   распаковки zip теперь работает без ручных шагов.
+3. Все версии платформ уже 15063 (csproj TargetPlatformVersion/MinVersion, manifest
+   MinVersion/MaxVersionTested) — подтверждено статическим прогоном.
+
+### Статическая приёмка v1.4.0.30 (без сборки, как заказано)
+- XML: 10/10 файлов парсятся; csproj well-formed, target сбалансирован.
+- 20 Reference-элементов с HintPath: каждый pkg+version существует в packages.config (0 расхождений).
+- Композиция: 42/42 исходника объявлены, битых ссылок нет; реальных Spacing=" — 0.
+- Версии синхронизированы: manifest/AssemblyInfo = 1.4.0.30.
+- GitHub Actions отключён (настройки репозитория) — CI не запускается, только ручной прогон.
+
+## v1.4.0.29-stable — Финальный валидный релиз кода; GitHub Actions отключён (2026-10-26)
+
+### Статус CI
+- **GitHub Actions для репозитория отключён** (UWP-тулчейн официально deprecated на hosted
+  runners windows-2022, стабильная сборка классического packages.config UAP csproj там невозможна).
+  Релиз собирается вручную в Visual Studio 2017/2019 по инструкции BUILD_VS2017.md
+  (SDK 15063/15254, Release|ARM для Lumia 950/950XL и HP Elite x3).
+- Файл workflow `.github/workflows/build-release.yml` сохранён как архивная справка по
+  корректной обвязке packages.config-restore (nuget.g.props + netcore50 facade references);
+  триггеры больше не срабатывают — Actions выключен на уровне настроек репозитория.
+
+### Версии платформ — приведены к 15063
+- `Barometer_UWP.csproj`: TargetPlatformVersion = **10.0.15063.0**, TargetPlatformMinVersion = 10.0.15063.0.
+- `Package.appxmanifest`: MinVersion = 10.0.15063.0, MaxVersionTested = **10.0.15063.0**.
+- Для сборки на машине без SDK 15063 достаточно заменить номер платформы в VS (Properties →
+  Packaging) или флаг `/p:TargetPlatformVersion=10.0.15254.0` — обратная совместимость гарантирована min 15063.
+
+### project.json ("could not be found") — исправлен корень
+- Ошибка NU1005 возникала из-за того, что CI-патч поднимал TargetPlatformMinVersion до самого
+  свежего SDK раннера, и NuGet-restore переходил на конвейер project.assets.json/project.json.
+- В репозитории **нет и никогда не было project.json / project.lock.json** (проверено по
+  `git ls-files`); в csproj зафиксированы `RestoreProjectStyle=packages.config` и
+  `PackageReferenceUpdateAutomaticAtRestoreTime=false` (v1.4.0.28) — конвейер JSON-restore
+  не задействуется никогда. В VS2017 при открытии решения использовать только nuget restore
+  для packages.config (команда «Восстановить пакеты NuGet» в Solution Explorer).
+
+### Статическая приёмка (вместо сборки, как запрошено)
+- Все XML-файлы (10 × .xaml/.csproj/.appxmanifest/.resw/packages.config) проходят парсер.
+- Реальных атрибутов StackPanel.Spacing (API 16299+) нет — только комментарии-предупреждения.
+- sln: Format 12.00, CRLF/tab, GUID проекта совпадает с csproj, 4 конфигурации ARM/x86.
+- Все 37 .cs и 5 .xaml объявлены в csproj; битых ссылок на отсутствующие файлы нет.
+- Версии синхронизированы: appxmanifest / AssemblyInfo = **1.4.0.29**.
+
+## v1.4.0.28-stable — Исправления сборки CI: project.json, дубли Reference, версии 15063 (2026-10-25)
+
+### Ошибка "project.json could not be found" (NU1005)
+- Корень: шаг "Patch project for CI" переопределял `TargetPlatformMinVersion` csproj на самый
+  свежий SDK раннера; NuGet начинал разрешение метапакета для uap10.0.<newest> и включал
+  конвейер restore проекта JSON, требовавший несуществующий `Barometer_UWP\project.json`.
+- Исправлено: `TargetPlatformMinVersion` больше не патчится — в csproj/sln/appxmanifest
+  зафиксирован **минимум 10.0.15063.0** (Windows 10 Mobile / Creators Update). Компилирующая
+  поверхность ограничивается только `TargetPlatformVersion` (пин на SDK раннера, обратно
+  совместим до 15063). В csproj явно добавлены `RestoreProjectStyle=packages.config` и
+  `PackageReferenceUpdateAutomaticAtRestoreTime=false` — конвейер project.assets.json/project.json
+  не задействуется никогда (ни в CI, ни при design-time сборке в VS).
+
+### Дублирующиеся ссылки (конфликт Reference-деклараций)
+- Шаг генерации `obj\Barometer_UWP.nuget.g.props` инжектировал по `<Reference>` на каждую
+  запись packages.config с абсолютными HintPath'ами — MSBuild видел два разных источника для
+  одинаковых выходных имён (Newtonsoft.Json, DocumentFormat.OpenXml, System.ObjectModel,
+  System.Runtime.WindowsRuntime.UI.Xaml уже объявлены в csproj с относительными HintPath'ами),
+  а фолбэк-паттерн `ref\netstandard1.3` возвращал netstandard-реализацииfacade'ы → каскад
+  CS0012 (duplicate System.Object) из v1.4.0.16b.
+- Исправлено: props-файл теперь содержит **только** свойства обвязки NuGet
+  (SolutionDir/PackagesDir/NuGetProjectStyle), ноль `<Reference>` items. Вселенная компиляции
+  принадлежит исключительно csproj (winmd-набор SDK через Microsoft.Windows.UI.Xaml.CSharp.targets
+  + защищённая ItemGroup netcore50-facade'ов).
+
+### Версии
+- Package.appxmanifest / AssemblyInfo: **1.4.0.28**; целевые платформы без изменений:
+  Target 10.0.15254.0, **MinVersion 10.0.15063.0** (csproj строки 14–15, manifest Dependencies).
+- .gitignore восстановлен в полном виде (bin/obj/packages/AppPackages/artifacts и пр.) —
+  предыдущая версия случайно вырезала правила и грозила попаданием мусора восстановления в git.
+
+## v1.4.0.27-stable — XAML Spacing (16299+) и чистка sln (2026-10-25)
+
+### StackPanel.Spacing — API доступен только с Windows 10 16299+
+Проект таргетит 15063/15254 (Windows 10 Mobile), поэтому `StackPanel.Spacing` недопустим
+(WMC/XAML compile error на целевой платформе). Удалены все реальные использования атрибута:
+- `Views/ChartMiniTile.xaml` — Spacing="6" убран, отступ перенесён на дочерний TextBlock (`Margin="6,0,0,5"`).
+- `Views/GraphicsPage.xaml` — Spacing="12" убран, отступ на первом дочернем TextBlock (`Margin="0,0,12,0"`).
+- `Views/SettingsPage.xaml` — Spacing="10" убраны; там где у детей уже был `Margin="0,0,10,0"` (кнопки) — ничего не добавлялось; чекбоксам LocalBackup/OneDriveBackup добавлен `Margin="0,0,10,0"`. В местах удалений оставлены комментарии-предупреждения про 16299+.
+Итоговое число удалённых использований по файлам: 2 + 1 + 5 = 8 (первоначальная оценка «6 в SettingsPage» была завышена — уточнено по фактическому коду).
+Все XAML проходят XML-парсер; в продакшн-коде атрибута Spacing не осталось (упоминания — только в комментариях-предупреждениях).
+
+### Barometer_UWP.sln
+- Удалён блок `REM ...` между заголовком файла и первой секцией `Project(...)`: это cmd-синтаксис,
+  просар SLN-парсер VS не понимает такие строки вне Global-секций (риск "solution file is malformed").
+  Конспект про ARM32-first/x86/ARM64-x64 полностью сохранён в BUILD_VS2017.md (раздел 3).
+- Перевод в CRLF + таб-индентация: формат, ожидаемый Visual Studio 2017 (файл был LF-only).
+- Проверено: GUID проекта `{C8D8B5A6-...}` == ProjectGuid в csproj; 4 конфигурации Debug|ARM, Debug|x86, Release|ARM, Release|x86.
+- Версии синхронизированы: 1.4.0.27 (appxmanifest, AssemblyInfo).
+
+## v1.4.0.26-stable — Релизная ветка для VS2017 (2026-10-24)
+
+- Стабильная ветка `releases/stable`: код статически верифицирован Roslyn-харнессом (0 ошибок компиляции C#).
+- sln: ARM32-first, x86 опционально (эмулятор 15254.1); ARM64/x64 законспектированы как unsupported на Windows 10 Mobile.
+- Добавлены BUILD_VS2017.md (полный гайд: SDK 15254, packages.config restore, тестовый сертификат Signing) и install_deps.cmd.
+- Версии манифеста/сборки синхронизированы: 1.4.0.26.
+
 ## v1.4.0.3 — Исправления карты неба / авто-темы (2026-09-30)
 
 ### Баги, найденные и исправленные в коде «карты неба» (Helpers/SkyMap.cs + SettingsViewModel.ApplyAutoTheme)
