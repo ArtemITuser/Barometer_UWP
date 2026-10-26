@@ -244,6 +244,27 @@
        package references the universe is pure Windows SDK, so the old self-heal target keyed
        on newtonsoft.json.12.0.3 was removed instead of being left to fail spuriously. -->
   <Target Name="EnsurePackagesRestored" BeforeTargets="ResolveAssemblyReferences">
-    <Message Importance="low" Text="v1.4.0.34: no compile-time NuGet dependencies - restore skipped." />
+    <Message Importance="low" Text="v1.4.0.35: no compile-time NuGet dependencies - restore skipped." />
+  </Target>
+  <!-- v1.4.0.35 STALE-BUILD-STATE GUARD. Evidence from the user's machine on v1.4.0.34
+       (packages folder deleted by hand, metapackage long gone, zero <Reference> items):
+       WMC1006/WMC9999 'System.Runtime' STILL fired. The only remaining way a pure-SDK UAP
+       project can see a wrong System.Runtime is leftover state from older tree layouts:
+         - obj\*.nuget.g.props/.targets from a pre-v1.4.0.32 restore (imported above when
+           present) which re-add PackageReference-style facade paths, and/or
+         - stale XamlCompiler cache under obj\.
+       This target deletes such residue BEFORE ResolveAssemblyReferences so every build
+       starts from a clean, SDK-only type universe. It touches ONLY generated files
+       (obj\bin\packages), never sources. -->
+  <Target Name="PurgeStaleRestoreState" BeforeTargets="EnsurePackagesRestored">
+    <ItemGroup>
+      <_StaleNuGetProps Include="$(MSBuildProjectDirectory)\obj\*.nuget.g.props;$(MSBuildProjectDirectory)\obj\*.nuget.g.targets;$(MSBuildProjectDirectory)\obj\*.nuget.cache" />
+    </ItemGroup>
+    <!-- All @() usages below are bare item-list expressions (allowed anywhere);
+         no item METADATA %(...) appears in any Condition - that was the exact
+         MSB4092 defect class removed in v1.4.0.33. -->
+    <Delete Files="@(_StaleNuGetProps)" ContinueOnError="WarnAndContinue" />
+    <RemoveDir Directories="$(MSBuildProjectDirectory)\obj\XamlPreCompile" Condition="Exists('$(MSBuildProjectDirectory)\obj\XamlPreCompile')" ContinueOnError="WarnAndContinue" />
+    <Message Importance="high" Text="PurgeStaleRestoreState: removed residual obj restore state (@(_StaleNuGetProps->'%(Filename)%(Extension)', ', ')). One-time manual cleanup of Barometer_UWP\obj, bin and ..\packages is still recommended." Condition="'@(_StaleNuGetProps->Count())' > 0" />
   </Target>
 </Project>

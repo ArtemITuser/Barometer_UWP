@@ -1,6 +1,29 @@
 # Barometer UWP — сборка в Visual Studio 2017 (Windows 10 Mobile / Lumia 950)
 
-**Стабильная ветка релизов:** `releases/stable` · **Версия:** 1.4.0.27 · **Тег:** `v1.4.0.27-stable`
+**Стабильная ветка релизов:** `releases/stable` · **Версия:** 1.4.0.35 · **Тег:** `v1.4.0.35-stable`
+
+---
+
+## -1. ВАЖНО: распаковывайте в НОВУЮ пустую папку (лечение WMC1006/WMC9999 «System.Runtime»)
+
+Если вы распаковываете архив релиза ПОВЕРХ старой папки предыдущей версии (или в Downloads
+остаётся содержимое от v1.4.0.29–34), вместе с новыми исходниками подхватывается старый каталог
+`Barometer_UWP\obj\` с остатками restore-состояния прежних компоновок проекта
+(`*.nuget.g.props/.targets`, кэш XamlPreCompile). Именно он возвращает ошибку
+
+    XamlCompiler error WMC1006: Cannot resolve Assembly or Windows Metadata file 'System.Runtime.dll'
+    WMC9999: Type universe cannot resolve assembly: System.Runtime, Version=4.0.0.0
+
+несмотря на то, что в самих исходниках затенять больше нечего. Начиная с v1.4.0.35 проект
+сам автоматически вычищает такие остатки перед каждой сборкой (таргет PurgeStaleRestoreState),
+но надёжнее сделать это один раз руками:
+
+1. Закройте Visual Studio.
+2. Удалите папки `Barometer_UWP\obj`, `Barometer_UWP\bin` и `packages` (если есть) — либо
+   распакуйте архив v1.4.0.35 в абсолютно новую пустую папку.
+3. Откройте `Barometer_UWP.sln`, Build → Rebuild Solution (Debug|ARM). NuGet restore для
+   компиляции не требуется (см. раздел 1).
+
 
 ---
 
@@ -18,7 +41,7 @@
 
 ## 1. Клонирование и восстановление пакетов
 
-**v1.4.0.34: проект больше НЕ имеет compile-time NuGet-зависимостей.** JSON — vendored
+**v1.4.0.35: проект больше НЕ имеет compile-time NuGet-зависимостей.** JSON — vendored
 (Helpers\JsonSerializer.cs), xlsx — на System.IO.Compression из Windows SDK. В packages.config
 остался только Microsoft.Net.Native.Compiler 1.7.3 (нужен лишь для Release/.NET Native; Debug
 собирается без restore вообще). Поэтому:

@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.4.0.35-stable — Guard от устаревшего состояния сборки (WMC1006/WMC9999 выживает после чистого дерева)
+- Postmortem v1.4.0.34 на машине пользователя: packages\ удалён, метапакета нет, `<Reference>` в csproj
+  ноль — а WMC1006/WMC9999 «System.Runtime» повторяется 1-в-1. Единственный оставшийся канал попадания
+  «чужого» System.Runtime во вселенную типов — остатки старого restore-состояния в obj\: импортируемые
+  при существовании `obj\*.nuget.g.props/.targets` (следы PackageReference-эпохи до v1.4.0.32) и кэш
+  XamlPreCompile. В архиве релиза их нет — значит в папке распаковки остался obj\ от предыдущих версий
+  (пользователь распаковывал поверх старой директории либо VS переиспользует содержимое Downloads).
+- Новый таргет `PurgeStaleRestoreState` (BeforeTargets=EnsurePackagesRestored): автоматически удаляет
+  `obj\*.nuget.g.props`, `obj\*.nuget.g.targets`, `obj\*.nuget.cache` и `obj\XamlPreCompile` перед
+  ResolveAssemblyReferences — каждая сборка стартует с чистого SDK-only универсума типов. Задевает
+  только генерируемые файлы, исходники не трогает. Формулировки проверены на MSB4092-класс: ни одного
+  %(metadata) внутри Condition (голые @(...) списки разрешены где угодно).
+- Обеспечена нулевая compile-time зависимость от NuGet (итог 34): JSON — vendored JsonSerializer.cs,
+  xlsx — System.IO.Compression из SDK, HTTP — Windows.Web.Http; packages.config только .NET Native
+  compiler (Release-тулчейн). Для Debug|ARM restore вообще не нужен.
+- Версии синхронизированы 1.4.0.35. Статическая приёмка: XML OK (8 файлов), реальных StackPanel.Spacing 0,
+  композиция csproj полная (38 .cs + 5 .xaml), платформенные цели 15063/15063.
+
 ## v1.4.0.34-stable — Окончательное исправление WMC1006/WMC9999 «System.Runtime» (нулевые NuGet-зависимости компиляции)
 - Postmortem v1.4.0.33 (чистое дерево, метапакета уже нет — ошибка осталась): ссылки на
   Newtonsoft.Json 12.0.3 и DocumentFormat.OpenXml 2.9.1 разрешались в их `lib\netstandard1.3`
