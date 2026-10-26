@@ -159,3 +159,12 @@ msbuild Barometer_UWP.sln /p:Configuration=Debug /p:Platform=x86
 5. Телефон в режиме разработчика → Deploy (F5) — или взять `.appxbundle` из п.4
 
 Готово: приложение стартует на Lumia 950/950 XL / HP Elite x3 (15254.603).
+
+## ⚠️ v1.4.0.36 — ЕДИНСТВЕННАЯ обязательная предсборочная операция
+Если VS упорно выдаёт `WMC1006 Cannot resolve Assembly or Windows Metadata file 'System.Runtime.dll'`
+при чистом дереве проекта — виновна машинно-глобальная папка `%USERPROFILE%\.nuget\packages`
+(NETStandard/netcore50 копии фасадов затеняют reference assemblies Windows SDK).
+Запустите **один раз** `clean_deps.cmd` из корня репозитория, затем Rebuild.
+Проект также защищён автоматически: таргет `RejectPackageFacadeShadowReferences` вырезает любые
+\packages\ фасады из ReferencePath перед XamlCompiler/csc, а `DisableImplicitNuGetFallbackFolder`
+запрещает RAR искать в глобальном packages-фолдере.

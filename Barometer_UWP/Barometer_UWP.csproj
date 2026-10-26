@@ -184,6 +184,67 @@
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
+  <!-- ================= v1.4.0.36: NuGet facade shadowing firewall =================
+       THE definitive fix for the recurring WMC1006 "Cannot resolve Assembly or
+       Windows Metadata file 'System.Runtime.dll'" + WMC9999 "Type universe cannot
+       resolve assembly: System.Runtime, Version=4.0.0.0".
+
+       Why it survived v1.4.0.32..35 (all of which cleaned THIS tree): the wrong
+       System.Runtime does not have to come from this repo at all. MSBuild's
+       ResolveAssemblyReferences performs simple-name resolution and its machine-wide
+       search order includes %USERPROFILE%\.nuget\packages (global packages folder)
+       and any HintPath-bearing imports; a NETSTANDARD1.x/netcore50 "System.Runtime"
+       facade found there carries TargetFrameworkAttribute(".NETStandard,..."), which
+       inside a UAP (NETFX_CORE) compile is NOT a valid provider of System.Object -
+       so XamlCompiler reports the correct SDK copy as shadowed/unresolvable even
+       though a file with that name exists on disk. Editing packages.config cannot
+       help while such copies exist anywhere on the machine.
+
+       Firewall (two layers):
+       (1) DisableImplicitNuGetFallbackFolder=true -> RAR may never probe the global
+           packages folder during simple-name resolution.
+       (2) RejectPackageFacadeShadowReferences target -> scans every resolved
+           ReferencePath entry whose path contains \packages\ and whose simple name
+           is a BCL facade the Windows SDK already ships, removes the matching
+           Reference items AND filters ReferencePath itself (removing Reference items
+           after RAR alone was the no-op defect of the v1.4.0.32 StripPackageFacadeShadows
+           attempt). Runs BEFORE RunBeforeXamlCompilation, i.e. before the XamlCompiler
+           type universe is built.
+       All filtering uses item metadata ONLY inside task-free transforms in target
+       bodies - no @(...) batching and no %(...) metadata in any Condition attribute
+       (the illegal expression classes that produced MSB4092 in v1.4.0.32). -->
+  <PropertyGroup>
+    <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+    <!-- Names of facades the Windows 10 SDK reference assemblies provide themselves.
+         Any NuGet-sourced copy of these must be rejected from the compile universe. -->
+    <FacadeShadowNames>System.Runtime;System.Private.Uri;System.Collections;System.Linq;System.IO;System.Threading;System.Threading.Tasks;System.ObjectModel;System.Resources.ResourceManager;System.Runtime.Extensions;System.Runtime.WindowsRuntime;System.Runtime.WindowsRuntime.UI.Xaml;System.Diagnostics.Debug;System.Globalization;System.Net.Http;System.Collections.Concurrent;System.ValueTuple;System.Runtime.InteropServices;System.Text.Encoding;System.Xml.ReaderWriter;System.Xml.XDocument;System.Dynamic.Runtime;System.Linq.Expressions;System.Reflection;System.Reflection.Extensions;System.Threading.Timer;System.Runtime.Numerics;System.ComponentModel;System.ComponentModel.Primitives;System.ComponentModel.TypeConverter;System.Xml.XmlDocument;System.Security.Cryptography.Algorithms;System.Security.Cryptography.Primitives</FacadeShadowNames>
+  </PropertyGroup>
+  <Target Name="RejectPackageFacadeShadowReferences" BeforeTargets="RunBeforeXamlCompilation;XamlPreCompile;Compile">
+    <!-- Stage 1: resolved references whose full path lies under a \packages\ folder.
+         The Condition uses ONLY %(Identity) metadata (no @() batching in the same
+         attribute) - the exact construct that is legal; v1.4.0.32 failed because it put
+         @(Names) inside a TARGET-level Condition, which is illegal. -->
+    <ItemGroup>
+      <_FacadeShadowRefs Include="@(ReferencePath)" Condition="$([System.String]::Copy('%(FullPath)').Replace('/','\').Contains('\packages\'))" />
+    </ItemGroup>
+    <!-- Stage 2: of those, keep only assemblies whose simple name matches an entry of
+         the SDK-provided facade list (case-insensitive via ToUpper on both sides). -->
+    <PropertyGroup>
+      <_FSNUpper>$(FacadeShadowNames.ToUpper())</_FSNUpper>
+    </PropertyGroup>
+    <ItemGroup>
+      <_FacadeShadowHit Include="@(_FacadeShadowRefs)" Condition="$(_FSNUpper.Contains(';%(FileName.ToUpper()).dll')) Or $(_FSNUpper.StartsWith('%(FileName.ToUpper()).dll;'))" />
+    </ItemGroup>
+    <!-- Stage 3: remove the shadowed entries from ReferencePath (the list XamlCompiler
+         and csc consume) AND from Reference items (belt for CopyLocal/copyfiles). -->
+    <ItemGroup Condition="'@(_FacadeShadowHit)' != ''">
+      <ReferencePath Remove="@(_FacadeShadowHit)" />
+      <!-- Belt: drop any HintPath-bearing Reference items pointing into packages\ (there
+           are none in this project by design; guards against a hand-added reference). -->
+      <Reference Remove="@(Reference)" Condition="$([System.String]::Copy('%(HintPath)').Replace('/','\').Contains('\packages\'))" />
+    </ItemGroup>
+    <Message Importance="high" Text="RejectPackageFacadeShadowReferences: rejected NuGet facade shadow(s) [@(_FacadeShadowHit -> '%(FileName)', ', ')] from ReferencePath; resolution falls through to Windows SDK reference assemblies." Condition="'@(_FacadeShadowHit)' != ''" />
+  </Target>
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>
   </PropertyGroup>
@@ -195,8 +256,13 @@
        IXmlNodeList (81 errors on rebuild/deploy). The standard nuget.g.props/.targets
        imports below are the only supported packages.config wiring for UAP; combined with
        EnsurePackagesRestored they cover fresh machines without manual facade faking. -->
-  <Import Project="$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.props" Condition="Exists('$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.props')" />
-  <Import Project="$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.targets" Condition="Exists('$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).nuget.g.targets')" />
+  <!-- v1.4.0.36: the obj\*.nuget.g.props/.targets conditional imports are REMOVED.
+       For a bare packages.config project nuget.exe never generates them anyway, so they
+       only ever mattered as STALE residue from older PackageReference-style restores -
+       exactly the state that kept injecting NuGet facade paths into ReferencePath and
+       produced WMC1006/WMC9999 'System.Runtime' on the user's machine through v1.4.0.35.
+       With zero compile-time package references there is nothing legitimate left to
+       import; deleting the imports closes the last known injection vector entirely. -->
   <!-- v1.4.0.30: self-healing restore. Root cause of MSB3245 'component not found' x18 +
        WMC1006 'System.Runtime, Version=4.0.0.0 cannot be resolved' on fresh machines:
        the source-only zip ships WITHOUT the ..\packages folder and nuget.exe does not
@@ -256,7 +322,10 @@
        This target deletes such residue BEFORE ResolveAssemblyReferences so every build
        starts from a clean, SDK-only type universe. It touches ONLY generated files
        (obj\bin\packages), never sources. -->
-  <Target Name="PurgeStaleRestoreState" BeforeTargets="EnsurePackagesRestored">
+  <!-- v1.4.0.36: BeforeTargets now includes RunBeforeXamlCompilation - the XamlCompiler
+       type universe is built at that point, which can run BEFORE ResolveAssemblyReferences,
+       so purging only before RAR was too late on some toolchain orderings. -->
+<Target Name="PurgeStaleRestoreState" BeforeTargets="RunBeforeXamlCompilation;EnsurePackagesRestored;ResolveAssemblyReferences">
     <ItemGroup>
       <_StaleNuGetProps Include="$(MSBuildProjectDirectory)\obj\*.nuget.g.props;$(MSBuildProjectDirectory)\obj\*.nuget.g.targets;$(MSBuildProjectDirectory)\obj\*.nuget.cache" />
     </ItemGroup>
