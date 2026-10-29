@@ -23,6 +23,16 @@
     <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <WindowsXamlEnableOverview>true</WindowsXamlEnableOverview>
     <PackageCertificateKeyFile>Barometer_UWP_TemporaryKey.pfx</PackageCertificateKeyFile>
+    <!-- v1.4.0.37: canonical UAP classic-project wiring (identical to the stock
+         VS2017 UniversalWindowApp1 csproj). These properties are what activate the
+         WindowsAppCommon/WinRT reference-assembly injection inside the imported
+         targets; their absence is why the SDK facade set was never added to the
+         compile universe -> WMC1006/WMC9999 'System.Runtime'. -->
+    <AppxPackage>true</AppxPackage>
+    <GenerateLibraryLayout>false</GenerateLibraryLayout>
+    <EnableTypeInfoValidation>true</EnableTypeInfoValidation>
+    <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+    <ResolveAssemblyWarnOrErrorOnTargetArchitectureOfPlatformItem>false</ResolveAssemblyWarnOrErrorOnTargetArchitectureOfPlatformItem>
     <AppxBundle>Never</AppxBundle>
     <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
   </PropertyGroup>
@@ -161,179 +171,72 @@
     </Page>
   </ItemGroup>
   <ItemGroup>
-    <!-- v1.4.0.34 FINAL: NO NuGet assembly references at all. Evidence chain that led here:
-         v1.4.0.30 hand-injected netcore50 facades -> 81 CS0012/CS0234;
-         v1.4.0.32 removed the UWP metapackage (its packages\netcore50 DLLs shadowed SDK
-         facades) -> WMC1006 persisted;
-         v1.4.0.33 clean tree (packages/obj/bin deleted, fresh restore) -> WMC1006/WMC9999
-         STILL persisted with only Newtonsoft.Json + DocumentFormat.OpenXml (netstandard1.3)
-         referenced. Root cause, verified byte-level against nuget.org assets: a
-         .NETStandard,v1.3 compile-time closure demands the whole NETSTANDARD1.3 facade
-         package graph (System.Runtime ref 4.0.20.0 etc.), which no UAP 15063 SDK install
-         contains - XamlCompiler type universe fails on the first one it cannot resolve.
-         Therefore both libs are REMOVED from the project:
-           - Newtonsoft.Json      -> vendored zero-dependency Helpers\JsonSerializer.cs
-           - DocumentFormat.OpenXml -> xlsx built directly as OPC zip via
-             System.IO.Compression.ZipArchive (Windows SDK, no NuGet).
-         The compile universe is now ONLY Windows SDK reference assemblies + Platform.winmd,
-         exactly like an untouched VS2017 UWP template - the configuration in which
-         System.Runtime 4.0.0.0 always resolves. No HintPath references may be added back;
-         if a third-party lib is ever needed again, it MUST ship a netcore50 or
-         uap10.0-targeted asset (see BUILD_VS2017.md section "Зависимости"). -->
+    <!-- v1.4.0.37 ARCHITECTURAL FIX (the real root cause). Postmortem of v1.4.0.29..36:
+         at some point the STANDARD UWP project reference block was stripped from this
+         csproj ("zero NuGet references" experiments in v34 went as far as deleting the
+         SDK references too). A VS2017 UWP project MUST declare its framework references
+         explicitly (System, System.Core, ..., Windows) exactly like the stock template;
+         Microsoft.Windows.UI.Xaml.CSharp.targets does NOT synthesize them for classic
+         projects. With no Reference items at all, ResolveAssemblyReferences hands the
+         XamlCompiler an EMPTY type universe -> WMC1006 "Cannot resolve Assembly or
+         Windows Metadata file 'System.Runtime.dll'" + WMC9999 "Type universe cannot
+         resolve assembly: System.Runtime, Version=4.0.0.0". That is why the error
+         survived every cache/packages/obj cleanup: there was nothing to resolve FROM.
+         The block below is the canonical VS2017 UAP template set - resolved by simple
+         name against the Windows 10 SDK (UnionMetadata + facade dir), zero HintPath,
+         zero NuGet. Do not add HintPath or packages\ paths back. -->
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Numerics.Vectors" />
+    <Reference Include="System.Runtime.InteropServices.WindowsRuntime" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="Windows" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
-  <!-- ================= v1.4.0.36: NuGet facade shadowing firewall =================
-       THE definitive fix for the recurring WMC1006 "Cannot resolve Assembly or
-       Windows Metadata file 'System.Runtime.dll'" + WMC9999 "Type universe cannot
-       resolve assembly: System.Runtime, Version=4.0.0.0".
-
-       Why it survived v1.4.0.32..35 (all of which cleaned THIS tree): the wrong
-       System.Runtime does not have to come from this repo at all. MSBuild's
-       ResolveAssemblyReferences performs simple-name resolution and its machine-wide
-       search order includes %USERPROFILE%\.nuget\packages (global packages folder)
-       and any HintPath-bearing imports; a NETSTANDARD1.x/netcore50 "System.Runtime"
-       facade found there carries TargetFrameworkAttribute(".NETStandard,..."), which
-       inside a UAP (NETFX_CORE) compile is NOT a valid provider of System.Object -
-       so XamlCompiler reports the correct SDK copy as shadowed/unresolvable even
-       though a file with that name exists on disk. Editing packages.config cannot
-       help while such copies exist anywhere on the machine.
-
-       Firewall (two layers):
-       (1) DisableImplicitNuGetFallbackFolder=true -> RAR may never probe the global
-           packages folder during simple-name resolution.
-       (2) RejectPackageFacadeShadowReferences target -> scans every resolved
-           ReferencePath entry whose path contains \packages\ and whose simple name
-           is a BCL facade the Windows SDK already ships, removes the matching
-           Reference items AND filters ReferencePath itself (removing Reference items
-           after RAR alone was the no-op defect of the v1.4.0.32 StripPackageFacadeShadows
-           attempt). Runs BEFORE RunBeforeXamlCompilation, i.e. before the XamlCompiler
-           type universe is built.
-       All filtering uses item metadata ONLY inside task-free transforms in target
-       bodies - no @(...) batching and no %(...) metadata in any Condition attribute
-       (the illegal expression classes that produced MSB4092 in v1.4.0.32). -->
-  <PropertyGroup>
-    <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
-    <!-- Names of facades the Windows 10 SDK reference assemblies provide themselves.
-         Any NuGet-sourced copy of these must be rejected from the compile universe. -->
-    <FacadeShadowNames>System.Runtime;System.Private.Uri;System.Collections;System.Linq;System.IO;System.Threading;System.Threading.Tasks;System.ObjectModel;System.Resources.ResourceManager;System.Runtime.Extensions;System.Runtime.WindowsRuntime;System.Runtime.WindowsRuntime.UI.Xaml;System.Diagnostics.Debug;System.Globalization;System.Net.Http;System.Collections.Concurrent;System.ValueTuple;System.Runtime.InteropServices;System.Text.Encoding;System.Xml.ReaderWriter;System.Xml.XDocument;System.Dynamic.Runtime;System.Linq.Expressions;System.Reflection;System.Reflection.Extensions;System.Threading.Timer;System.Runtime.Numerics;System.ComponentModel;System.ComponentModel.Primitives;System.ComponentModel.TypeConverter;System.Xml.XmlDocument;System.Security.Cryptography.Algorithms;System.Security.Cryptography.Primitives</FacadeShadowNames>
-  </PropertyGroup>
-  <Target Name="RejectPackageFacadeShadowReferences" BeforeTargets="RunBeforeXamlCompilation;XamlPreCompile;Compile">
-    <!-- Stage 1: resolved references whose full path lies under a \packages\ folder.
-         The Condition uses ONLY %(Identity) metadata (no @() batching in the same
-         attribute) - the exact construct that is legal; v1.4.0.32 failed because it put
-         @(Names) inside a TARGET-level Condition, which is illegal. -->
-    <ItemGroup>
-      <_FacadeShadowRefs Include="@(ReferencePath)" Condition="$([System.String]::Copy('%(FullPath)').Replace('/','\').Contains('\packages\'))" />
-    </ItemGroup>
-    <!-- Stage 2: of those, keep only assemblies whose simple name matches an entry of
-         the SDK-provided facade list (case-insensitive via ToUpper on both sides). -->
-    <PropertyGroup>
-      <_FSNUpper>$(FacadeShadowNames.ToUpper())</_FSNUpper>
-    </PropertyGroup>
-    <ItemGroup>
-      <_FacadeShadowHit Include="@(_FacadeShadowRefs)" Condition="$(_FSNUpper.Contains(';%(FileName.ToUpper()).dll')) Or $(_FSNUpper.StartsWith('%(FileName.ToUpper()).dll;'))" />
-    </ItemGroup>
-    <!-- Stage 3: remove the shadowed entries from ReferencePath (the list XamlCompiler
-         and csc consume) AND from Reference items (belt for CopyLocal/copyfiles). -->
-    <ItemGroup Condition="'@(_FacadeShadowHit)' != ''">
-      <ReferencePath Remove="@(_FacadeShadowHit)" />
-      <!-- Belt: drop any HintPath-bearing Reference items pointing into packages\ (there
-           are none in this project by design; guards against a hand-added reference). -->
-      <Reference Remove="@(Reference)" Condition="$([System.String]::Copy('%(HintPath)').Replace('/','\').Contains('\packages\'))" />
-    </ItemGroup>
-    <Message Importance="high" Text="RejectPackageFacadeShadowReferences: rejected NuGet facade shadow(s) [@(_FacadeShadowHit -> '%(FileName)', ', ')] from ReferencePath; resolution falls through to Windows SDK reference assemblies." Condition="'@(_FacadeShadowHit)' != ''" />
-  </Target>
-  <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
+<PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>
   </PropertyGroup>
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
-  <!-- v1.4.0.31: the v1.4.0.19/20 fallback block that injected netcore50 facade
-       <Reference>s when obj/*.nuget.g.props was absent is REMOVED. Evidence from the
-       user's machine (v1.4.0.30): those HintPath references resolve fine but poison the
-       NETFX_CORE compile universe -> CS0012 mscorlib cascade + CS0234 CodeDom + CS0122
-       IXmlNodeList (81 errors on rebuild/deploy). The standard nuget.g.props/.targets
-       imports below are the only supported packages.config wiring for UAP; combined with
-       EnsurePackagesRestored they cover fresh machines without manual facade faking. -->
-  <!-- v1.4.0.36: the obj\*.nuget.g.props/.targets conditional imports are REMOVED.
-       For a bare packages.config project nuget.exe never generates them anyway, so they
-       only ever mattered as STALE residue from older PackageReference-style restores -
-       exactly the state that kept injecting NuGet facade paths into ReferencePath and
-       produced WMC1006/WMC9999 'System.Runtime' on the user's machine through v1.4.0.35.
-       With zero compile-time package references there is nothing legitimate left to
-       import; deleting the imports closes the last known injection vector entirely. -->
-  <!-- v1.4.0.30: self-healing restore. Root cause of MSB3245 'component not found' x18 +
-       WMC1006 'System.Runtime, Version=4.0.0.0 cannot be resolved' on fresh machines:
-       the source-only zip ships WITHOUT the ..\packages folder and nuget.exe does not
-       generate obj\*.nuget.g.props for bare packages.config projects, so every facade
-       HintPath above resolves to a nonexistent path until a manual restore is run.
-       This target fires before ResolveAssemblyReferences and runs nuget restore itself
-       (via VS-bundled NuGetTasks assembly - no nuget.exe needed on PATH). If neither
-       nuget.exe nor the VS assembly is found it fails with an actionable message
-       instead of the cryptic 20 unresolved-reference diagnostics. -->
-  <PropertyGroup>
-    <_NuGetExe Condition="'$(_NuGetExe)'=='' And Exists('$(MSBuildThisFileDirectory)..\.nuget\nuget.exe')">$(MSBuildThisFileDirectory)..\.nuget\nuget.exe</_NuGetExe>
-    <_NuGetTasksAssembly>$([MSBuild]::ValueOrDefault('$(VsInstallRoot)','C:\Program Files (x86)\Microsoft Visual Studio'))\MSBuild\Microsoft\nuget10\NuGetTasks.dll</_NuGetTasksAssembly>
-    <!-- v1.4.0.32: WMC9999 "Type universe cannot resolve assembly: System.Runtime,
-         Version=4.0.0.0" postmortem. Root cause was the Microsoft.NETCore.UniversalWindowsPlatform
-         metapackage in packages.config: its netcore50 facade DLLs shadow the Windows SDK
-         reference assemblies during MSBuild/XamlCompiler simple-name resolution. The fix is
-         removing the metapackage from packages.config (done in v1.4.0.32) - a correct UAP
-         compile sees ONLY the SDK reference assemblies for BCL names. The StripPackageFacadeShadows
-         belt added in v1.4.0.32 was itself broken (MSB4092: item batching @(PackageConflictFacadeNames)
-         inside a target-level Condition is illegal) and functionally a no-op (removing Reference
-         items after ResolveAssemblyReferences does not affect the produced ReferencePath), so it is
-         removed in v1.4.0.33. If a stale packages\microsoft.netcore.universalwindowsplatform folder
-         survives from an older restore, delete the whole packages folder - the property below only
-         silences platform-item architecture warnings, it does NOT filter references. -->
-    <ResolveAssemblyWarnOrErrorOnTargetArchitectureOfPlatformItem>false</ResolveAssemblyWarnOrErrorOnTargetArchitectureOfPlatformItem>
-  </PropertyGroup>
-  <!-- NuGetTasks self-heal restore (used by EnsurePackagesRestored below) is only wired
-       when the VS-bundled assembly actually exists; on machines without it, nuget.exe at
-       ..\.nuget\nuget.exe or a manual restore is used instead. -->
-  <UsingTask TaskName="NuGetRestoreTask" AssemblyFile="$(_NuGetTasksAssembly)" Condition="!Exists('$(_NuGetExe)') And Exists('$(_NuGetTasksAssembly)')" />
-  <!-- v1.4.0.33: StripPackageFacadeShadows REMOVED. Two defects: (a) MSB4092 - an
-       item-batching expression @(PackageConflictFacadeNames) is illegal inside a
-       target-level Condition (conditions cannot batch), which broke project load;
-       (b) even rewritten with batching, removing Reference items AFTER
-       ResolveAssemblyReferences does not touch the already-produced ReferencePath,
-       so the target was a no-op for its purpose anyway. The real fix stays in
-       packages.config (metapackage dropped in v1.4.0.32): with no netcore50 facade
-       DLLs on disk there is nothing to shadow the SDK reference assemblies. -->
-  <!-- v1.4.0.34 FINAL: NuGet restore is NO LONGER REQUIRED for compilation. The only
-       remaining package (microsoft.net.native.compiler) is an ILCompiler toolchain used at
-       .NET Native (Release) link time; VS's own .NET Native toolset covers Debug builds, and
-       the compiler package resolves via obj\*.nuget.g.props/.targets imports above when a
-       manual restore IS run. All previous WMC1006/WMC9999 'System.Runtime' failures came from
-       NuGet-sourced facade DLLs shadowing SDK reference assemblies; with zero compile-time
-       package references the universe is pure Windows SDK, so the old self-heal target keyed
-       on newtonsoft.json.12.0.3 was removed instead of being left to fail spuriously. -->
-  <Target Name="EnsurePackagesRestored" BeforeTargets="ResolveAssemblyReferences">
-    <Message Importance="low" Text="v1.4.0.35: no compile-time NuGet dependencies - restore skipped." />
-  </Target>
-  <!-- v1.4.0.35 STALE-BUILD-STATE GUARD. Evidence from the user's machine on v1.4.0.34
-       (packages folder deleted by hand, metapackage long gone, zero <Reference> items):
-       WMC1006/WMC9999 'System.Runtime' STILL fired. The only remaining way a pure-SDK UAP
-       project can see a wrong System.Runtime is leftover state from older tree layouts:
-         - obj\*.nuget.g.props/.targets from a pre-v1.4.0.32 restore (imported above when
-           present) which re-add PackageReference-style facade paths, and/or
-         - stale XamlCompiler cache under obj\.
-       This target deletes such residue BEFORE ResolveAssemblyReferences so every build
-       starts from a clean, SDK-only type universe. It touches ONLY generated files
-       (obj\bin\packages), never sources. -->
-  <!-- v1.4.0.36: BeforeTargets now includes RunBeforeXamlCompilation - the XamlCompiler
-       type universe is built at that point, which can run BEFORE ResolveAssemblyReferences,
-       so purging only before RAR was too late on some toolchain orderings. -->
-<Target Name="PurgeStaleRestoreState" BeforeTargets="RunBeforeXamlCompilation;EnsurePackagesRestored;ResolveAssemblyReferences">
+  <!-- v1.4.0.37 ARCHITECTURE CLEANUP (audit findings):
+       (a) the NuGet self-heal restore machinery (_NuGetExe/_NuGetTasksAssembly/
+           UsingTask NuGetRestoreTask/EnsurePackagesRestored) is REMOVED - the project
+           has no compile-time package dependencies; a stale NuGetTasks.dll path in a
+           UsingTask could hard-fail project load on machines with a different VS
+           layout (IDE0006 class). Restore of the .NET Native compiler package, if ever
+           needed for Release, is done manually via install_deps.cmd.
+       (b) the duplicate old PurgeStaleRestoreState target (v1.4.0.35) is removed; the
+           single hardened copy lives at the bottom of this file. -->
+
+  <!-- ================= v1.4.0.37: hardened build-state hygiene =================
+       The v1.4.0.36 "RejectPackageFacadeShadowReferences" firewall is REMOVED for
+       good: it matched ReferencePath entries by SIMPLE NAME against the SDK facade
+       list, so it would strip the LEGITIMATE Windows-SDK copies of System.Runtime.dll
+       etc. and itself guarantee WMC9999. No name-based reference filtering belongs in
+       this project; the only hygiene left is deleting stale generated obj state. -->
+  <Target Name="PurgeStaleRestoreState" BeforeTargets="RunBeforeXamlCompilation;ResolveAssemblyReferences">
     <ItemGroup>
       <_StaleNuGetProps Include="$(MSBuildProjectDirectory)\obj\*.nuget.g.props;$(MSBuildProjectDirectory)\obj\*.nuget.g.targets;$(MSBuildProjectDirectory)\obj\*.nuget.cache" />
     </ItemGroup>
-    <!-- All @() usages below are bare item-list expressions (allowed anywhere);
-         no item METADATA %(...) appears in any Condition - that was the exact
-         MSB4092 defect class removed in v1.4.0.33. -->
     <Delete Files="@(_StaleNuGetProps)" ContinueOnError="WarnAndContinue" />
     <RemoveDir Directories="$(MSBuildProjectDirectory)\obj\XamlPreCompile" Condition="Exists('$(MSBuildProjectDirectory)\obj\XamlPreCompile')" ContinueOnError="WarnAndContinue" />
-    <Message Importance="high" Text="PurgeStaleRestoreState: removed residual obj restore state (@(_StaleNuGetProps->'%(Filename)%(Extension)', ', ')). One-time manual cleanup of Barometer_UWP\obj, bin and ..\packages is still recommended." Condition="'@(_StaleNuGetProps->Count())' > 0" />
+    <Message Importance="high" Text="PurgeStaleRestoreState: removed residual obj restore state." Condition="'@(_StaleNuGetProps)' != ''" />
+  </Target>
+  <!-- v1.4.0.37 DIAGNOSTIC: prints the resolved reference set and the Windows SDK
+       platform root used for facade resolution. Visible in the build output at
+       normal verbosity ("Detailed build output" not required). If WMC9999 still
+       fires on some machine, this dump pinpoints whether System.Runtime.dll is
+       present in ReferencePath and from which path it came. -->
+  <Target Name="DumpReferenceSet" BeforeTargets="RunBeforeXamlCompilation;Compile">
+    <ItemGroup>
+      <_DiagLines Include="@(ReferencePath)" />
+    </ItemGroup>
+    <Message Importance="high" Text="[v1.4.0.37 diag] TargetPlatformRoot=$(TargetPlatformRoot)" />
+    <Message Importance="high" Text="[v1.4.0.37 diag] ReferencePath count: @(_DiagLines->Count())" Condition="'@(_DiagLines)' != ''" />
+    <Message Importance="high" Text="[v1.4.0.37 diag] System.Runtime resolved: @(_DiagLines->WithMetadataValue('FileName','System.Runtime'))" />
+    <Message Importance="high" Text="[v1.4.0.37 diag] ReferencePath is EMPTY - SDK facade injection did not run." Condition="'@(_DiagLines)' == ''" />
   </Target>
 </Project>

@@ -168,3 +168,20 @@ msbuild Barometer_UWP.sln /p:Configuration=Debug /p:Platform=x86
 Проект также защищён автоматически: таргет `RejectPackageFacadeShadowReferences` вырезает любые
 \packages\ фасады из ReferencePath перед XamlCompiler/csc, а `DisableImplicitNuGetFallbackFolder`
 запрещает RAR искать в глобальном packages-фолдере.
+
+## ⚠️ Важно для v1.4.0.37 (архитектурное исправление WMC1006/WMC9999)
+
+Начиная с этой версии в `Barometer_UWP.csproj` восстановлен **канонический блок SDK-ссылок**
+(`System`, `System.Core`, `Windows` и т.д., как в шаблоне VS2017 Universal App) и свойства
+`AppxPackage=true`/`GenerateLibraryLayout=false`. Именно их отсутствие с v1.4.0.29 делало
+вселенную типов XamlCompiler пустой — отсюда две ошибки «Cannot resolve System.Runtime.dll» /
+«Type universe cannot resolve assembly: System.Runtime», которые не зависели от кэшей NuGet,
+папки packages или obj (все предыдущие «корни» были сопутствующими).
+
+Дополнительно удалён таргет v1.4.0.36, который вырезал из ReferencePath сборки по простым
+именам фасадов — он на любой машине удалял бы легитимные SDK-копии и сам воспроизводил WMC9999.
+
+Сборка: распаковать в новую папку → открыть sln → Rebuild Solution (Debug|ARM). Restore NuGet
+не требуется. В вывод сборки добавлена диагностика `[v1.4.0.37 diag]` (TargetPlatformRoot,
+число разрешённых ссылок, источник System.Runtime) — если ошибка когда-либо повторится, эти
+строки сразу укажут, какая именно сборка попала во вселенную типов.

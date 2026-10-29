@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.4.0.37-stable — Архитектурный аудит csproj/sln: НАСТОЯЩИЙ корень WMC1006/WMC9999
+- **Восстановлен канонический блок <Reference> UWP-шаблона VS2017** (System, System.Core,
+  System.Numerics, System.Numerics.Vectors, System.Runtime.InteropServices.WindowsRuntime,
+  Microsoft.CSharp, System.Xml.Linq, Windows). Начиная с v1.4.0.29 проект не объявлял НИ ОДНОЙ
+  сборки: «нулевые NuGet-эксперименты» v34 зашли слишком далеко и выпилили также SDK-ссылки.
+  Классический UAP-проект обязан декларировать framework-ссылки явно — imported targets их не
+  синтезируют. Пустой ReferencePath => XamlCompiler нечего разрешать => ровно наблюдаемые две
+  ошибки в ЛЮБОМ чистом окружении. Разрешение по простому имени из Windows SDK (UnionMetadata +
+  facade), без HintPath и без NuGet.
+- **Добавлены свойства канонической UAP-проводки**: AppxPackage=true, GenerateLibraryLayout=false
+  (активируют инъекцию WinRT/фасадных ссылок в Microsoft.Windows.UI.Xaml.CSharp.targets).
+- **Удалён self-defeating firewall v1.4.0.36** (RejectPackageFacadeShadowReferences): он фильтровал
+  ReferencePath по ПРОСТЫМ ИМЕНАМ фасадов и на любой машине вырезал бы ЛЕГИТИМНЫЕ копии SDK
+  (System.Runtime.dll и др.) — то есть сам гарантированно производил WMC9999. Второй баг, найденный
+  аудитом: даже если v35/v36 лечили кэш, таргет v36 ломал сборку всегда.
+- **Удалена мёртвая NuGet-самолечивающая механика** (UsingTask NuGetRestoreTask, _NuGetTasksAssembly,
+  EnsurePackagesRestored): UsingTask на несуществующий путь к NuGetTasks.dll мог ронять загрузку
+  проекта (IDE0006); compile-time NuGet-зависимостей нет.
+- Убраны дублирующиеся определения свойств и противоречащие реальности комментарии; сохранён
+  единственный PurgeStaleRestoreState.
+- **Новый диагностический таргет DumpReferenceSet**: печатает TargetPlatformRoot, число разрешённых
+  ссылок и источник System.Runtime — при любом повторении WMC9999 лог сразу укажет виновника.
+- Предупреждение MSB3245 «System.Private.Uri»: было следствием пустого универсума типов; после
+  восстановления блока ссылок SDK предоставляет фасад сам, отдельная ссылка не нужна.
+- Версии синхронизированы 1.4.0.37 (AssemblyInfo, Package.appxmanifest).
 ## v1.4.0.35-stable — Guard от устаревшего состояния сборки (WMC1006/WMC9999 выживает после чистого дерева)
 - Postmortem v1.4.0.34 на машине пользователя: packages\ удалён, метапакета нет, `<Reference>` в csproj
   ноль — а WMC1006/WMC9999 «System.Runtime» повторяется 1-в-1. Единственный оставшийся канал попадания
